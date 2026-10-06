@@ -140,3 +140,44 @@ export const comments = sqliteTable("comments", {
   text: text("text").notNull(),
   createdAt: text("created_at").notNull(),
 });
+
+// scopeFilters: JSON — Record<dimCode, string[]>; bu is akisinin kapsadigi veri kesiti.
+// status zinciri: draft -> submitted -> in_review -> approved -> locked (terminal),
+// reddetme (rejected) her asamadan donus, admin "reopen" ile locked'tan draft'a donebilir.
+export const workflowItems = sqliteTable(
+  "workflow_items",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    modelId: integer("model_id").notNull(),
+    name: text("name").notNull(),
+    scopeFilters: text("scope_filters").notNull(),
+    status: text("status", {
+      enum: ["draft", "submitted", "in_review", "approved", "rejected", "locked"],
+    })
+      .notNull()
+      .default("draft"),
+    ownerId: integer("owner_id").notNull(),
+    approverId: integer("approver_id"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+    submittedAt: text("submitted_at"),
+    reviewedAt: text("reviewed_at"),
+    approvedAt: text("approved_at"),
+    lockedAt: text("locked_at"),
+  },
+  (t) => [index("ix_workflow_model").on(t.modelId), index("ix_workflow_status").on(t.status)]
+);
+
+export const workflowHistory = sqliteTable(
+  "workflow_history",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    workflowId: integer("workflow_id").notNull(),
+    fromStatus: text("from_status"),
+    toStatus: text("to_status").notNull(),
+    userId: integer("user_id").notNull(),
+    comment: text("comment"),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [index("ix_workflow_history_wf").on(t.workflowId)]
+);

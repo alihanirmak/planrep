@@ -5,6 +5,7 @@ import { sqlite } from "@/lib/db";
 import { getModelDims } from "@/lib/model";
 import { allowedSets } from "@/lib/access";
 import { upsertFacts } from "@/lib/facts-write";
+import { WorkflowLockError } from "@/lib/workflow";
 import { logAudit } from "@/lib/audit";
 import { parseLocaleNumber } from "@/lib/number";
 
@@ -146,7 +147,15 @@ export async function POST(req: Request) {
       .run(modelId, file.name, session.id, parsed.length, now).lastInsertRowid
   );
 
-  upsertFacts(modelId, dims, parsed, uploadId, now);
+  try {
+    upsertFacts(modelId, dims, parsed, uploadId, now);
+  } catch (e) {
+    if (e instanceof WorkflowLockError) {
+      sqlite.prepare("UPDATE uploads SET status = 'failed' WHERE id = ?").run(uploadId);
+      return NextResponse.json({ error: "workflow_locked", message: e.message }, { status: 423 });
+    }
+    throw e;
+  }
 
   logAudit(session.id, "upload.excel", "upload", uploadId, {
     modelId,

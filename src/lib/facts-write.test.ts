@@ -134,3 +134,74 @@ describe("revertUpload", () => {
     expect(factValue("ONLYNEW1", "ONLYNEW2")).toBeUndefined();
   });
 });
+
+describe("upsertFacts + workflow kilidi", () => {
+  const lockDims: DimInfo[] = [
+    {
+      id: 10,
+      code: "LD1",
+      name: "LockDim1",
+      type: "standard",
+      slot: 1,
+      members: [
+        { id: 1, code: "LOCKED1", name: "Locked1", parentId: null, orderIdx: 0 },
+        { id: 2, code: "FREE1", name: "Free1", parentId: null, orderIdx: 1 },
+      ],
+    },
+    { id: 11, code: "LD2", name: "LockDim2", type: "standard", slot: 2, members: [] },
+  ];
+  let lockModelId: number;
+
+  beforeAll(async () => {
+    lockModelId = Number(
+      sqlite
+        .prepare("INSERT INTO models (code, name, created_at) VALUES (?,?,?)")
+        .run("FWLOCK", "Facts Write Lock Test", new Date().toISOString()).lastInsertRowid
+    );
+    const workflow = await import("./workflow");
+    const planner = Number(
+      sqlite
+        .prepare("INSERT INTO users (email, name, password_hash, role, created_at) VALUES (?,?,?,?,?)")
+        .run("fwplanner@test.local", "Planner", "x", "planner", new Date().toISOString()).lastInsertRowid
+    );
+    let item = workflow.createWorkflowItem({
+      modelId: lockModelId,
+      name: "Kilit Testi",
+      scopeFilters: { LD1: ["LOCKED1"] },
+      ownerId: planner,
+    });
+    item = workflow.applyTransition(item, { action: "submit", from: "draft", to: "submitted" }, planner, null);
+    item = workflow.applyTransition(item, { action: "review", from: "submitted", to: "in_review" }, planner, null);
+    item = workflow.applyTransition(item, { action: "approve", from: "in_review", to: "approved" }, planner, null);
+    workflow.applyTransition(item, { action: "lock", from: "approved", to: "locked" }, planner, null);
+  });
+
+  it("kilitli kapsamdaki koordinata upsert WorkflowLockError firlatir ve hicbir sey yazmaz", () => {
+    const uploadId = newUpload("lock-attempt.csv");
+    const before = (
+      sqlite.prepare("SELECT COUNT(*) c FROM facts WHERE model_id=?").get(lockModelId) as { c: number }
+    ).c;
+    expect(() =>
+      upsertFacts(
+        lockModelId,
+        lockDims,
+        [{ coords: ["LOCKED1", "X"], value: 1 }],
+        uploadId,
+        new Date().toISOString()
+      )
+    ).toThrowError(/kilit/i);
+    const after = (
+      sqlite.prepare("SELECT COUNT(*) c FROM facts WHERE model_id=?").get(lockModelId) as { c: number }
+    ).c;
+    expect(after).toBe(before);
+  });
+
+  it("kilit kapsami disindaki koordinata upsert normal calisir", () => {
+    const uploadId = newUpload("lock-free.csv");
+    upsertFacts(lockModelId, lockDims, [{ coords: ["FREE1", "X"], value: 42 }], uploadId, new Date().toISOString());
+    const row = sqlite
+      .prepare("SELECT value FROM facts WHERE model_id=? AND d1=? AND d2=?")
+      .get(lockModelId, "FREE1", "X") as { value: number } | undefined;
+    expect(row?.value).toBe(42);
+  });
+});

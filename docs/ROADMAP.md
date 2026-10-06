@@ -1,7 +1,7 @@
 # PlanRep — Geliştirme Yol Haritası & Takip Listesi
 
 > **Nasıl kullanılır:** Bu dosya yaşayan bir takip listesidir. Bir madde üzerinde çalışmaya başlarken `[ ]` → işe başlandığında yorum/PR linki ekleyin, tamamlandığında `[x]` yapın. Detaylı mimari gerekçeler için `ARCHITECTURE_AUDIT.md`'ye bakın.
-> **Son güncelleme:** 2026-06-10 — Faz 1 (Sprint 1.1 + Sprint 1.2) tamamlandı: lint borcu, cascade cleanup, IN(...) chunking, N+1 optimizasyonu, Docker, DB yedekleme, Postgres geçiş değerlendirmesi, bulk upsert, pivot/query üst sınırı, Vitest test altyapısı. Faz 2/3 sprintlere bölündü (her sprint 2-8 hafta arası, Faz'ın toplam süresine göre); büyük maddeler artık daha küçük, takip edilebilir parçalar halinde.
+> **Son güncelleme:** 2026-06-10 — Faz 1 (Sprint 1.1 + Sprint 1.2) tamamlandı: lint borcu, cascade cleanup, IN(...) chunking, N+1 optimizasyonu, Docker, DB yedekleme, Postgres geçiş değerlendirmesi, bulk upsert, pivot/query üst sınırı, Vitest test altyapısı. Faz 2 / Sprint 2.1 tamamlandı: workflow onay akışı (data lock dahil) + senaryo kopyalama/karşılaştırma ekranı. Faz 2/3 kalan sprintler devam ediyor.
 
 ---
 
@@ -45,8 +45,8 @@
 
 ### Sprint 2.1 — Workflow & senaryo yönetimi
 
-- [ ] Workflow/onay akışı (submit → review → approve → lock) veri modeli + UI
-- [ ] Senaryo/versiyon karşılaştırma ekranı (VERSION dimension üzerine kopyalama/compare UI)
+- [x] Workflow/onay akışı (submit → review → approve → lock) veri modeli + UI
+- [x] Senaryo/versiyon karşılaştırma ekranı (VERSION dimension üzerine kopyalama/compare UI)
 
 ### Sprint 2.2 — Audit, formül motoru & iş kuralları
 
@@ -136,3 +136,13 @@
   - `src/components/ReportView.tsx`
   - `src/components/Sidebar.tsx`
   - `next build` bu kuralları çalıştırmıyor (build başarılı), yalnızca `npm run lint`/CI'daki lint adımı kırmızı çıkıyor. Faz 1'e "React Compiler lint borcu temizliği" olarak eklenmeli.
+
+### Sprint 2.1 tamamlama notu (2026-06-10)
+
+- Yeni tablolar: `workflow_items` (status: draft→submitted→in_review→approved→locked, scope `scope_filters` JSON Record<dimCode,string[]>), `workflow_history` (append-only geçiş günlüğü). `src/lib/workflow.ts` durum makinesini (`canTransition`/`applyTransition`) ve kilit kontrolünü (`findBlockingLock`, `findBlockingLockForFilters`) içerir.
+- **Veri kilidi gerçek zamanlı uygulanıyor:** `locked` durumundaki bir workflow'un kapsamına giren koordinatlara `upsertFacts` (dolayısıyla `/api/upload`, `/api/integrations/import`, `/api/scenario/copy`) `WorkflowLockError` fırlatır → route'lar `423 Locked` döner. `/api/facts` DELETE da kesişim kontrolü yapar.
+- Senaryo kopyalama (`/api/scenario/copy`) VERSION tipi bir boyuttaki bir üyenin verisini başka bir üyeye kopyalar; sonuç normal bir `uploads` kaydı olarak loglandığından mevcut `/api/uploads/[id]/revert` ile geri alınabilir.
+- Karşılaştırma ekranı (`/scenarios`) ekstra backend gerektirmedi — VERSION zaten normal bir boyut olduğundan mevcut `/api/query` (colDim=VERSION) birebir kullanıldı, sadece fark/yüzde kolonları client-side eklendi.
+- `/workflow` (liste+oluşturma) ve `/workflow/[id]` (detay, durum geçiş butonları, geçmiş) sayfaları eklendi; nav + i18n güncellendi.
+- 12 yeni birim test (`workflow.test.ts`) + `facts-write.test.ts`'e 2 kilit senaryosu eklendi (toplam 61 test). Ayrıca gerçek `next dev` sunucusuna karşı tam döngü (submit→review→approve→lock→kilitli-kopyalama-reddi) manuel API smoke testiyle doğrulandı.
+- **Bilinen sınırlama:** `revertUpload` kilit kontrolünden geçmiyor (bir upload'ı geri almak, o veriyi sonradan kilitleyen bir workflow'u göz ardı edebilir) — kapsam dışı bırakıldı, gelecekte ele alınmalı.

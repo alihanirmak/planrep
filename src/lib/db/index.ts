@@ -115,6 +115,33 @@ CREATE TABLE IF NOT EXISTS comments (
   text TEXT NOT NULL,
   created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS workflow_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  model_id INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  scope_filters TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'draft',
+  owner_id INTEGER NOT NULL,
+  approver_id INTEGER,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  submitted_at TEXT,
+  reviewed_at TEXT,
+  approved_at TEXT,
+  locked_at TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_workflow_model ON workflow_items(model_id);
+CREATE INDEX IF NOT EXISTS ix_workflow_status ON workflow_items(status);
+CREATE TABLE IF NOT EXISTS workflow_history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  workflow_id INTEGER NOT NULL,
+  from_status TEXT,
+  to_status TEXT NOT NULL,
+  user_id INTEGER NOT NULL,
+  comment TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_workflow_history_wf ON workflow_history(workflow_id);
 `;
 
 sqlite.exec(DDL);

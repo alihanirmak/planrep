@@ -1,6 +1,7 @@
 import { sqlite } from "./db";
 import type { DimInfo } from "./model";
 import { chunkArray } from "./fact-filters";
+import { findBlockingLock, WorkflowLockError } from "./workflow";
 
 export type FactWrite = { coords: string[]; value: number };
 
@@ -63,6 +64,16 @@ export function upsertFacts(
 ) {
   if (rows.length === 0) return;
   const slots = dims.map((d) => d.slot);
+
+  for (const f of rows) {
+    const coordsByDimCode: Record<string, string | undefined> = {};
+    dims.forEach((d, i) => {
+      coordsByDimCode[d.code] = f.coords[i];
+    });
+    const blocker = findBlockingLock(modelId, dims, coordsByDimCode);
+    if (blocker) throw new WorkflowLockError(blocker.id, blocker.name);
+  }
+
   const colList = slots.map((s) => `d${s}`).join(",");
   const joinCond = slots.map((s) => `facts.d${s} = tmp_upsert_coords.d${s}`).join(" AND ");
 

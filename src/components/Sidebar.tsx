@@ -9,6 +9,8 @@ const NAV: Array<{ href: string; key: TKey; icon: string; adminOnly?: boolean }>
   { href: "/", key: "nav.home", icon: "🏠" },
   { href: "/reports", key: "nav.reports", icon: "📊" },
   { href: "/dashboards", key: "nav.dashboards", icon: "📈" },
+  { href: "/workflow", key: "nav.workflow", icon: "✅" },
+  { href: "/scenarios", key: "nav.scenarios", icon: "🔀" },
   { href: "/ai", key: "nav.ai", icon: "✨" },
   { href: "/modeling", key: "nav.modeling", icon: "🧊" },
   { href: "/browser", key: "nav.browser", icon: "🔎" },

@@ -5,6 +5,7 @@ import { sqlite } from "@/lib/db";
 import { getModelDims } from "@/lib/model";
 import { allowedSets } from "@/lib/access";
 import { buildFactWhereVariants, type WhereVariant } from "@/lib/fact-filters";
+import { findBlockingLockForFilters } from "@/lib/workflow";
 import { logAudit } from "@/lib/audit";
 
 const bodySchema = z.object({
@@ -105,8 +106,19 @@ export async function DELETE(req: Request) {
       { status: 400 }
     );
   }
-  const { variants, empty } = buildWhere(modelId, filters, session.id);
+  const { dims, variants, empty } = buildWhere(modelId, filters, session.id);
   if (empty) return NextResponse.json({ deleted: 0 });
+
+  const blocker = findBlockingLockForFilters(modelId, dims, filters);
+  if (blocker) {
+    return NextResponse.json(
+      {
+        error: "workflow_locked",
+        message: `Veri kilitli: "${blocker.name}" onay akışı bu veri kesitini kilitlemiş durumda.`,
+      },
+      { status: 423 }
+    );
+  }
 
   let deleted = 0;
   for (const v of variants as WhereVariant[]) {

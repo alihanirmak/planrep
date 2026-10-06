@@ -6,6 +6,7 @@ import { getConnector } from "@/lib/connectors";
 import { getModelDims } from "@/lib/model";
 import { allowedSets } from "@/lib/access";
 import { upsertFacts } from "@/lib/facts-write";
+import { WorkflowLockError } from "@/lib/workflow";
 import { logAudit } from "@/lib/audit";
 import { parseLocaleNumber } from "@/lib/number";
 
@@ -124,7 +125,15 @@ export async function POST(req: Request) {
       .run(modelId, `SAP: ${source}`, session.id, rows.length, now).lastInsertRowid
   );
 
-  upsertFacts(modelId, dims, rows, uploadId, now);
+  try {
+    upsertFacts(modelId, dims, rows, uploadId, now);
+  } catch (e) {
+    if (e instanceof WorkflowLockError) {
+      sqlite.prepare("UPDATE uploads SET status = 'failed' WHERE id = ?").run(uploadId);
+      return NextResponse.json({ error: "workflow_locked", message: e.message }, { status: 423 });
+    }
+    throw e;
+  }
 
   logAudit(session.id, "import.sap", "upload", uploadId, {
     connector: connectorId,
