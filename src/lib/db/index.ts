@@ -189,6 +189,24 @@ CREATE TABLE IF NOT EXISTS notifications (
 );
 CREATE INDEX IF NOT EXISTS ix_notifications_user ON notifications(user_id);
 CREATE INDEX IF NOT EXISTS ix_notifications_user_unread ON notifications(user_id, is_read);
+CREATE TABLE IF NOT EXISTS scheduled_syncs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  connector_config_id INTEGER NOT NULL,
+  source TEXT NOT NULL,
+  model_id INTEGER NOT NULL,
+  mapping TEXT NOT NULL,
+  interval_minutes INTEGER NOT NULL DEFAULT 60,
+  active INTEGER NOT NULL DEFAULT 1,
+  last_run_at TEXT,
+  last_status TEXT,
+  last_error TEXT,
+  last_inserted INTEGER,
+  created_by INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_scheduled_syncs_active ON scheduled_syncs(active);
 `;
 
 sqlite.exec(DDL);

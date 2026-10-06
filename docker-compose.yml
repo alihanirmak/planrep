@@ -13,6 +13,12 @@ services:
       # SAP/AXET entegrasyon binary'si container icinde yoksa AI sorgu uctan
       # devre disi kalsin diye varsayilan olarak kapali; gerekirse 0 yapin.
       AXET_DISABLE: ${AXET_DISABLE:-1}
+      # Zamanlanmis veri yenileme (POST /api/cron/sync) icin paylasimli sir.
+      # Tanimlanmazsa bu uc 503 doner (varsayilan olarak acik/korumasiz
+      # birakilmaz). Harici bir cron/webhook (OS crontab, k8s CronJob, GitHub
+      # Actions scheduled workflow) bu ucu "X-Cron-Secret: $CRON_SECRET"
+      # header'iyla periyodik olarak cagirmalidir; bkz. docs/ROADMAP.md.
+      CRON_SECRET: ${CRON_SECRET:-}
     volumes:
       - planrep-data:/app/data
     restart: unless-stopped

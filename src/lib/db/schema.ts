@@ -265,3 +265,33 @@ export const notifications = sqliteTable(
     index("ix_notifications_user_unread").on(t.userId, t.isRead),
   ]
 );
+
+// Zamanlanmis veri yenileme: bir connector_config + source + model + mapping
+// kombinasyonunu periyodik olarak (interval_minutes) tekrar calistirir.
+// Gercek tetikleme harici bir cron/webhook cagrisiyla (POST /api/cron/sync,
+// CRON_SECRET header'i ile korunur) yapilir — uygulama icinde arka plan
+// zamanlayici (setInterval) YOK, cunku Next.js build/page-collection asamasi
+// da modul kodunu calistirir ve bir timer'in build sirasinda baslamasi
+// istenmeyen bir yan etki olurdu. mapping: JSON — kaynak kolonu -> boyut
+// kodu veya "DEGER" (api/integrations/import ile ayni format).
+export const scheduledSyncs = sqliteTable(
+  "scheduled_syncs",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    name: text("name").notNull(),
+    connectorConfigId: integer("connector_config_id").notNull(),
+    source: text("source").notNull(),
+    modelId: integer("model_id").notNull(),
+    mapping: text("mapping").notNull(),
+    intervalMinutes: integer("interval_minutes").notNull().default(60),
+    active: integer("active").notNull().default(1),
+    lastRunAt: text("last_run_at"),
+    lastStatus: text("last_status", { enum: ["success", "failed"] }),
+    lastError: text("last_error"),
+    lastInserted: integer("last_inserted"),
+    createdBy: integer("created_by").notNull(),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (t) => [index("ix_scheduled_syncs_active").on(t.active)]
+);

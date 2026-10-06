@@ -35,6 +35,20 @@ type ConnectorConfig = {
   config: Record<string, string>;
   active: boolean;
 };
+type ScheduledSync = {
+  id: number;
+  name: string;
+  connectorConfigId: number;
+  source: string;
+  modelId: number;
+  mapping: Record<string, string>;
+  intervalMinutes: number;
+  active: boolean;
+  lastRunAt: string | null;
+  lastStatus: "success" | "failed" | null;
+  lastError: string | null;
+  lastInserted: number | null;
+};
 
 export default function IntegrationsPage() {
   const t = getT(readLocaleClient());
@@ -58,6 +72,13 @@ export default function IntegrationsPage() {
   const [newFields, setNewFields] = useState<Record<string, string>>({});
   const [manageMsg, setManageMsg] = useState<string | null>(null);
 
+  // Zamanlanmis senkronizasyon yonetimi (admin)
+  const [schedules, setSchedules] = useState<ScheduledSync[]>([]);
+  const [showSchedules, setShowSchedules] = useState(false);
+  const [newScheduleName, setNewScheduleName] = useState("");
+  const [newScheduleInterval, setNewScheduleInterval] = useState(60);
+  const [scheduleMsg, setScheduleMsg] = useState<string | null>(null);
+
   const connector = connectors.find((c) => c.id === connectorId);
   const model = useMemo(() => models.find((m) => m.id === modelId) ?? null, [models, modelId]);
   const newTypeDef = useMemo(() => types.find((ty) => ty.type === newType), [types, newType]);
@@ -77,9 +98,16 @@ export default function IntegrationsPage() {
       .then(setConfigs);
   }, []);
 
+  const loadSchedules = useCallback(() => {
+    fetch("/api/scheduled-syncs")
+      .then((r) => (r.ok ? r.json() : []))
+      .then(setSchedules);
+  }, []);
+
   useEffect(() => {
     loadConnectors();
     loadConfigs();
+    loadSchedules();
     fetch("/api/connector-configs/types")
       .then((r) => (r.ok ? r.json() : []))
       .then((list: ConnectorTypeDefInfo[]) => {
@@ -93,7 +121,7 @@ export default function IntegrationsPage() {
         if (list.length > 0) setModelId(list[0].id);
       });
     fetch("/api/me").then((r) => r.json()).then((me) => setRole(me.role ?? "viewer"));
-  }, [loadConnectors, loadConfigs]);
+  }, [loadConnectors, loadConfigs, loadSchedules]);
 
   async function loadPreview(src: string) {
     setSourceId(src);
@@ -168,6 +196,62 @@ export default function IntegrationsPage() {
     }
   }
 
+  // Mevcut (sourceId/modelId/mapping) kurulumu kaydeder, boylece harici bir
+  // cron/webhook cagrisi (POST /api/cron/sync) bunu periyodik olarak
+  // calistirabilir — asil otomatik tetikleme Node icinde bir timer DEGIL,
+  // dis bir zamanlayicidir (bkz. docs/ROADMAP.md).
+  async function createSchedule() {
+    if (connectorId == null || !sourceId || modelId == null || !newScheduleName.trim()) return;
+    setScheduleMsg(null);
+    const res = await fetch("/api/scheduled-syncs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: newScheduleName,
+        connectorConfigId: connectorId,
+        source: sourceId,
+        modelId,
+        mapping,
+        intervalMinutes: newScheduleInterval,
+      }),
+    });
+    if (res.ok) {
+      setNewScheduleName("");
+      loadSchedules();
+      setShowSchedules(true);
+    } else {
+      const body = await res.json().catch(() => ({}));
+      setScheduleMsg(body.detail ?? body.error ?? "Zamanlanmış senkronizasyon oluşturulamadı");
+    }
+  }
+
+  async function toggleSchedule(s: ScheduledSync) {
+    await fetch(`/api/scheduled-syncs/${s.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ active: !s.active }),
+    });
+    loadSchedules();
+  }
+
+  async function removeSchedule(s: ScheduledSync) {
+    if (!confirm(`"${s.name}" zamanlanmış senkronizasyonu silinsin mi?`)) return;
+    await fetch(`/api/scheduled-syncs/${s.id}`, { method: "DELETE" });
+    loadSchedules();
+  }
+
+  async function runScheduleNow(s: ScheduledSync) {
+    setScheduleMsg(`"${s.name}" çalıştırılıyor...`);
+    const res = await fetch(`/api/scheduled-syncs/${s.id}/run`, { method: "POST" });
+    const body = await res.json().catch(() => ({}));
+    setScheduleMsg(
+      body.status === "success"
+        ? `✅ "${s.name}": ${body.inserted} satır içeri alındı`
+        : `❌ "${s.name}": ${body.error ?? "çalıştırma başarısız"}`
+    );
+    loadSchedules();
+  }
+
   async function createConfig() {
     if (!newType || !newName.trim()) return;
     setManageMsg(null);
@@ -223,14 +307,90 @@ export default function IntegrationsPage() {
           <p className="mt-1 text-sm text-slate-500">{t("pg.integrations.sub")}</p>
         </div>
         {role === "admin" && (
-          <button
-            onClick={() => setShowManage(!showManage)}
-            className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
-          >
-            🔌 Bağlantıları Yönet
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowSchedules(!showSchedules)}
+              className="rounded-lg bg-slate-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700"
+            >
+              ⏱ Zamanlanmış Senkronizasyonlar
+            </button>
+            <button
+              onClick={() => setShowManage(!showManage)}
+              className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+            >
+              🔌 Bağlantıları Yönet
+            </button>
+          </div>
         )}
       </div>
+
+      {showSchedules && (
+        <div className="mt-4 rounded-xl bg-white p-4 shadow-sm">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
+            Zamanlanmış Senkronizasyonlar
+          </h2>
+          <p className="mt-1 text-xs text-slate-400">
+            Kayıtlı bir senkronizasyon, süresi dolduğunda (interval) harici bir cron/webhook çağrısı
+            (<code>POST /api/cron/sync</code>) tarafından otomatik çalıştırılır. Hemen test etmek için
+            &quot;Şimdi Çalıştır&quot;ı kullanabilirsiniz.
+          </p>
+          <div className="mt-2 overflow-hidden rounded-lg border border-slate-100">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+                <tr>
+                  <th className="px-3 py-2 text-left">Ad</th>
+                  <th className="px-3 py-2 text-left">Periyot</th>
+                  <th className="px-3 py-2 text-left">Son Çalışma</th>
+                  <th className="px-3 py-2 text-left">Durum</th>
+                  <th className="px-3 py-2"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-slate-700">
+                {schedules.map((s) => (
+                  <tr key={s.id} className={s.active ? "" : "opacity-40"}>
+                    <td className="px-3 py-2 font-medium">{s.name}</td>
+                    <td className="px-3 py-2 text-xs">{s.intervalMinutes} dk</td>
+                    <td className="px-3 py-2 text-xs">
+                      {s.lastRunAt ? new Date(s.lastRunAt).toLocaleString("tr-TR") : "—"}
+                    </td>
+                    <td className="px-3 py-2 text-xs">
+                      {s.lastStatus === "success" && <span className="text-green-600">✅ {s.lastInserted} satır</span>}
+                      {s.lastStatus === "failed" && (
+                        <span className="text-red-600" title={s.lastError ?? ""}>
+                          ❌ hata
+                        </span>
+                      )}
+                      {!s.lastStatus && "henüz çalışmadı"}
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      <div className="flex justify-end gap-2 text-xs">
+                        <button onClick={() => runScheduleNow(s)} className="text-blue-500 hover:underline">
+                          Şimdi Çalıştır
+                        </button>
+                        <button onClick={() => toggleSchedule(s)} className="text-blue-500 hover:underline">
+                          {s.active ? "Pasifleştir" : "Aktifleştir"}
+                        </button>
+                        <button onClick={() => removeSchedule(s)} className="text-red-500 hover:underline">
+                          Sil
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {schedules.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="px-3 py-4 text-center text-sm text-slate-400">
+                      Henüz zamanlanmış senkronizasyon yok. Aşağıda bir kaynak/model/eşleme seçip
+                      &quot;Zamanlanmış Hale Getir&quot; ile oluşturabilirsiniz.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          {scheduleMsg && <div className="mt-2 text-sm text-slate-600">{scheduleMsg}</div>}
+        </div>
+      )}
 
       {showManage && (
         <div className="mt-4 rounded-xl bg-white p-4 shadow-sm">
@@ -409,6 +569,41 @@ export default function IntegrationsPage() {
               </button>
             )}
           </div>
+
+          {preview && role === "admin" && (
+            <div className="mt-3 flex flex-wrap items-end gap-3 rounded-lg bg-slate-50 p-3">
+              <label className="flex flex-col text-xs text-slate-500">
+                Senkronizasyon Adı
+                <input
+                  value={newScheduleName}
+                  onChange={(e) => setNewScheduleName(e.target.value)}
+                  placeholder="örn. Günlük SAP Aktüel"
+                  className="mt-1 w-56 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
+                />
+              </label>
+              <label className="flex flex-col text-xs text-slate-500">
+                Periyot (dakika)
+                <input
+                  type="number"
+                  min={5}
+                  max={10080}
+                  value={newScheduleInterval}
+                  onChange={(e) => setNewScheduleInterval(Number(e.target.value))}
+                  className="mt-1 w-28 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
+                />
+              </label>
+              <button
+                onClick={createSchedule}
+                className="rounded-lg bg-slate-600 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
+              >
+                ⏱ Zamanlanmış Hale Getir
+              </button>
+              <span className="text-[10px] text-slate-400">
+                Yukarıdaki kaynak/model/kolon eşlemesiyle, belirtilen periyotta otomatik çalışacak bir
+                senkronizasyon kaydı oluşturur.
+              </span>
+            </div>
+          )}
 
           {preview && (
             <>
