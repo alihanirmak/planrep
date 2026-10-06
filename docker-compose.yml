@@ -27,8 +27,24 @@ services:
       SSO_DEFAULT_ROLE: ${SSO_DEFAULT_ROLE:-viewer}
       SSO_DEFAULT_TENANT_ID: ${SSO_DEFAULT_TENANT_ID:-1}
       SSO_PROVIDER_LABEL: ${SSO_PROVIDER_LABEL:-}
+      # Sunucu taraflı caching (pivot/query, 60sn TTL). Tanimli degilse
+      # otomatik olarak bellek-ici fallback'e duser (Redis servisi
+      # opsiyoneldir — asagidaki "redis" profile'ini acarak etkinlestirin:
+      # docker compose --profile cache up).
+      REDIS_URL: ${REDIS_URL:-}
     volumes:
       - planrep-data:/app/data
+    restart: unless-stopped
+
+  # Opsiyonel paylasimli cache. Varsayilan olarak baslatilmaz (coklu-instance
+  # dagitimda gerekli, tek instance kurulumlar bellek-ici fallback'i kullanir).
+  # Etkinlestirmek icin: docker compose --profile cache up
+  # ve REDIS_URL=redis://redis:6379 olarak ayarlayin.
+  redis:
+    image: redis:7-alpine
+    profiles: ["cache"]
+    volumes:
+      - planrep-redis-data:/data
     restart: unless-stopped
 
   # Tek seferlik yedek almak icin: docker compose run --rm backup
@@ -44,3 +60,4 @@ services:
 
 volumes:
   planrep-data:
+  planrep-redis-data:

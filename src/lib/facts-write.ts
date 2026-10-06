@@ -3,6 +3,18 @@ import type { DimInfo } from "./model";
 import { chunkArray } from "./fact-filters";
 import { findBlockingLock, WorkflowLockError } from "./workflow";
 import { evaluateBusinessRules, BusinessRuleError, type RuleViolation } from "./business-rules";
+import { cacheDeleteByPrefix } from "./cache";
+
+// upsertFacts/revertUpload bu modelin tum pivot/query cache sonuclarini
+// gecersiz kilar — veri degistigi icin TTL dolana kadar bekletmek yerine
+// (bkz. api/pivot/route.ts, api/query/route.ts) hemen invalidate edilir.
+// Fire-and-forget (await edilmez): invalidation basarisiz olsa bile en
+// kotu ihtimalle TTL (60sn) dolana kadar bayat sonuc donebilir, yazma
+// isleminin kendisi hicbir zaman bu yuzden geciktirilmez/basarisiz olmaz.
+function invalidateModelCache(modelId: number) {
+  cacheDeleteByPrefix(`pivot:v1:${modelId}:`).catch(() => {});
+  cacheDeleteByPrefix(`query:v1:${modelId}:`).catch(() => {});
+}
 
 export type FactWrite = { coords: string[]; value: number };
 
@@ -174,6 +186,7 @@ export function upsertFacts(
     sqlite.exec("DROP TABLE IF EXISTS temp.tmp_upsert_coords");
   });
   tx();
+  invalidateModelCache(modelId);
   return { warnings };
 }
 
@@ -256,5 +269,6 @@ export function revertUpload(
     logFactAuditBulk(modelId, null, slots, auditEntries, "revert", userId, now);
   });
   tx();
+  invalidateModelCache(modelId);
   return replaced.length;
 }

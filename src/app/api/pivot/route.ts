@@ -7,6 +7,7 @@ import { allowedSets } from "@/lib/access";
 import { buildFactWhereVariants, sumGroupedRows, MAX_AGGREGATE_RESULT_ROWS } from "@/lib/fact-filters";
 import { formatT } from "@/lib/i18n";
 import { getServerT } from "@/lib/i18n-server";
+import { cached, hashCacheParams } from "@/lib/cache";
 
 const bodySchema = z.object({
   modelId: z.number().int(),
@@ -16,6 +17,14 @@ const bodySchema = z.object({
   page: z.number().int().min(0).optional(),
   pageSize: z.number().int().min(1).max(1000).optional(),
 });
+
+// Pivot sonuclari (facts tablosu uzerinde agir GROUP BY/SUM) kisa sureli
+// (60sn) cache'lenir — bkz. lib/cache.ts. Anahtar session.id'yi de icerir
+// cunku sonuc kullanicinin veri erisim kisitlarina (allowedSets) gore
+// degisir; iki farkli kullanicinin aslinda farkli gorebilecegi sonuclari
+// yanlislikla paylasmamak icin bu sart. Yazma yollarinda (upsertFacts/
+// revertUpload) modelId bazli invalidation yapilir (bkz. lib/facts-write.ts).
+const PIVOT_CACHE_TTL_SECONDS = 60;
 
 export async function POST(req: Request) {
   const session = await getSession();
@@ -35,11 +44,46 @@ export async function POST(req: Request) {
   if (new Set(axis).size !== axis.length) {
     return NextResponse.json({ error: "duplicate_dims" }, { status: 400 });
   }
-  const rowD = rows.map((c) => dims.find((d) => d.code === c));
-  const colD = cols.map((c) => dims.find((d) => d.code === c));
-  if (rowD.some((d) => !d) || colD.some((d) => !d)) {
+  if (rows.some((c) => !dims.some((d) => d.code === c)) || cols.some((c) => !dims.some((d) => d.code === c))) {
     return NextResponse.json({ error: "invalid_dims" }, { status: 400 });
   }
+
+  const cacheKey = `pivot:v1:${modelId}:${session.id}:${hashCacheParams({ rows, cols, filters, page, pageSize })}`;
+  const body = await cached(cacheKey, PIVOT_CACHE_TTL_SECONDS, () =>
+    computePivot(session.id, modelId, rows, cols, filters, page, pageSize)
+  );
+  if ("error" in body) {
+    if (body.error === "result_too_large") {
+      const { t } = await getServerT();
+      return NextResponse.json(
+        { ...body, message: formatT(t("err.resultTooLargeCount"), { count: body.count, max: MAX_AGGREGATE_RESULT_ROWS }) },
+        { status: 400 }
+      );
+    }
+    return NextResponse.json(body, { status: 400 });
+  }
+  return NextResponse.json(body);
+}
+
+type PivotComputeResult =
+  | {
+      tuples: Array<{ r: string[]; c: string[]; v: number }>;
+      pagination?: { page: number; pageSize: number; totalRoots: number };
+    }
+  | { error: "result_too_large"; count: number };
+
+function computePivot(
+  userId: number,
+  modelId: number,
+  rows: string[],
+  cols: string[],
+  filters: Record<string, string[]>,
+  page: number | undefined,
+  pageSize: number | undefined
+): PivotComputeResult {
+  const dims = getModelDims(modelId);
+  const rowD = rows.map((c) => dims.find((d) => d.code === c));
+  const colD = cols.map((c) => dims.find((d) => d.code === c));
 
   // Sayfalama: ilk satir boyutunun (rows[0]) kok uyeleri sayfalanir, sayfaya
   // secilen kok uyelerin TUM alt agaci dahil edilir — boylece client'ta
@@ -60,13 +104,13 @@ export async function POST(req: Request) {
     effectiveFilters = { ...filters, [firstRowDim.code]: rowCodes };
   }
 
-  const access = allowedSets(session.id, dims);
+  const access = allowedSets(userId, dims);
   const { variants, empty } = buildFactWhereVariants(modelId, dims, effectiveFilters, access);
   if (empty) {
-    return NextResponse.json({
+    return {
       tuples: [],
-      ...(pagination ? { pagination: { page, pageSize, totalRoots: allRoots.length } } : {}),
-    });
+      ...(pagination ? { pagination: { page: page!, pageSize: pageSize!, totalRoots: allRoots.length } } : {}),
+    };
   }
 
   const rowSel = rowD.map((d, i) => `d${d!.slot} AS r${i}`).join(", ");
@@ -87,14 +131,7 @@ export async function POST(req: Request) {
   const keyFields = [...rowD.map((_, i) => `r${i}`), ...colD.map((_, i) => `c${i}`)];
   const raw = sumGroupedRows(partials, keyFields);
   if (raw.length > MAX_AGGREGATE_RESULT_ROWS) {
-    const { t } = await getServerT();
-    return NextResponse.json(
-      {
-        error: "result_too_large",
-        message: formatT(t("err.resultTooLargeCount"), { count: raw.length, max: MAX_AGGREGATE_RESULT_ROWS }),
-      },
-      { status: 400 }
-    );
+    return { error: "result_too_large", count: raw.length };
   }
 
   const tuples = raw.map((row) => ({
@@ -103,8 +140,8 @@ export async function POST(req: Request) {
     v: Number(row.v),
   }));
 
-  return NextResponse.json({
+  return {
     tuples,
-    ...(pagination ? { pagination: { page, pageSize, totalRoots: allRoots.length } } : {}),
-  });
+    ...(pagination ? { pagination: { page: page!, pageSize: pageSize!, totalRoots: allRoots.length } } : {}),
+  };
 }

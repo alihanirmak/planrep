@@ -73,6 +73,22 @@
   Toplam **228 test**. Lint/typecheck/build temiz. **Henüz commit
   edilmedi** — kullanıcı onayı bekleniyor, sonra Sprint 3.2 madde 2
   (Redis caching) için onay istenecek.
+- Virtualized grid commit edildi ve push edildi (`41548a1`, origin/main
+  güncel).
+- Sprint 3.2 madde 2 (Redis caching) bu oturumda implemente edildi:
+  `ioredis` bağımlılığı eklendi (bu sefer harici bağımlılık ekleme
+  kararı — Redis protokolünü kendimiz implemente etmek anlamsız olurdu),
+  `lib/cache.ts` — `REDIS_URL` tanımlıysa gerçek Redis, tanımlı değilse
+  OTOMATIK bellek-içi fallback (CRON_SECRET/SSO'nun aksine "varsayılan
+  kapalı" DEĞİL, çünkü caching güvenlik değil performans özelliği).
+  `/api/pivot`+`/api/query` 60sn TTL ile cache'lendi (anahtar
+  session.id'yi de içeriyor — kullanıcı bazlı veri erişimi nedeniyle),
+  `upsertFacts`/`revertUpload`'da modelId bazlı anlık invalidation.
+  `next dev`'e karşı manuel doğrulama: ilk sorgu 352ms, cache'li ikinci
+  sorgu 24ms, sonuçlar aynı. 12 yeni test — toplam **240 test**.
+  Lint/typecheck/build temiz. **Henüz commit edilmedi** — kullanıcı
+  onayı bekleniyor, sonra Sprint 3.2 madde 3 (real-time collaboration)
+  için onay istenecek.
 
 ---
 
