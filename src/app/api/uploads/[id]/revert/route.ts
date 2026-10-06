@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { parseIdParam, invalidIdResponse } from "@/lib/route-params";
 import { getSession } from "@/lib/auth";
 import { sqlite } from "@/lib/db";
 import { getModelDims, getModelTenantId } from "@/lib/model";
@@ -15,7 +16,9 @@ export async function POST(
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  const id = Number((await params).id);
+  const id = parseIdParam((await params).id);
+
+  if (id === null) return invalidIdResponse();
   const upload = sqlite
     .prepare("SELECT id, status, model_id AS modelId FROM uploads WHERE id = ?")
     .get(id) as { id: number; status: string; modelId: number } | undefined;

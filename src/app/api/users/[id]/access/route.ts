@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { parseIdParam, invalidIdResponse } from "@/lib/route-params";
 import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { sqlite } from "@/lib/db";
@@ -13,7 +14,8 @@ export async function GET(
   if (!session || session.role !== "admin") {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
-  const id = Number((await params).id);
+  const id = parseIdParam((await params).id);
+  if (id === null) return invalidIdResponse();
   const user = sqlite.prepare("SELECT id FROM users WHERE id = ? AND tenant_id = ?").get(id, session.tenantId);
   if (!user) return NextResponse.json({ error: "not_found" }, { status: 404 });
   return NextResponse.json(getUserAccess(id));
@@ -36,7 +38,8 @@ export async function PUT(
   if (!session || session.role !== "admin") {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
-  const id = Number((await params).id);
+  const id = parseIdParam((await params).id);
+  if (id === null) return invalidIdResponse();
   const user = sqlite.prepare("SELECT id FROM users WHERE id = ? AND tenant_id = ?").get(id, session.tenantId);
   if (!user) return NextResponse.json({ error: "not_found" }, { status: 404 });
 

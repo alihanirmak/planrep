@@ -76,7 +76,9 @@ export function listNotifications(
   opts?: { unreadOnly?: boolean; limit?: number }
 ): Notification[] {
   const where = opts?.unreadOnly ? "AND is_read = 0" : "";
-  const limit = Math.min(Math.max(opts?.limit ?? 50, 1), 200);
+  const requested = opts?.limit;
+  const safeRequested = Number.isFinite(requested) ? (requested as number) : 50;
+  const limit = Math.min(Math.max(safeRequested, 1), 200);
   const rows = sqlite
     .prepare(
       `SELECT * FROM notifications WHERE user_id = ? ${where} ORDER BY id DESC LIMIT ?`

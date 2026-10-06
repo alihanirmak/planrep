@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { parseIdParam, invalidIdResponse } from "@/lib/route-params";
 import { getSession } from "@/lib/auth";
 import { sqlite } from "@/lib/db";
 import { canAccessCommentEntity } from "@/lib/access";
@@ -9,7 +10,8 @@ export async function DELETE(
 ) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  const id = Number((await params).id);
+  const id = parseIdParam((await params).id);
+  if (id === null) return invalidIdResponse();
   const row = sqlite
     .prepare("SELECT user_id, entity_type AS entityType, entity_id AS entityId FROM comments WHERE id = ?")
     .get(id) as { user_id: number; entityType: "report" | "dashboard" | "cell"; entityId: string } | undefined;

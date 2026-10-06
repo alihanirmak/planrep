@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { parseIdParam, invalidIdResponse } from "@/lib/route-params";
 import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { sqlite } from "@/lib/db";
@@ -11,7 +12,8 @@ export async function GET(
 ) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  const id = Number((await params).id);
+  const id = parseIdParam((await params).id);
+  if (id === null) return invalidIdResponse();
 
   const dim = sqlite
     .prepare(
@@ -54,7 +56,9 @@ export async function PATCH(
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   if (session.role === "viewer") return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
-  const id = Number((await params).id);
+  const id = parseIdParam((await params).id);
+
+  if (id === null) return invalidIdResponse();
   const parsed = patchSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success || Number.isNaN(id)) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
@@ -82,7 +86,9 @@ export async function DELETE(
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   if (session.role === "viewer") return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
-  const id = Number((await params).id);
+  const id = parseIdParam((await params).id);
+
+  if (id === null) return invalidIdResponse();
   const dim = sqlite
     .prepare("SELECT id FROM dimensions WHERE id = ? AND tenant_id = ?")
     .get(id, session.tenantId);

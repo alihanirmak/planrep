@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { parseIdParam, invalidIdResponse } from "@/lib/route-params";
 import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { sqlite } from "@/lib/db";
@@ -19,7 +20,9 @@ export async function POST(
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   if (session.role === "viewer") return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
-  const dimensionId = Number((await params).id);
+  const dimensionId = parseIdParam((await params).id);
+
+  if (dimensionId === null) return invalidIdResponse();
   const parsed = createSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success || Number.isNaN(dimensionId)) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });

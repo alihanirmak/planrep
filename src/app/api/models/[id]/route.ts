@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { parseIdParam, invalidIdResponse } from "@/lib/route-params";
 import { getSession } from "@/lib/auth";
 import { sqlite } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
@@ -9,7 +10,8 @@ export async function GET(
 ) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  const id = Number((await params).id);
+  const id = parseIdParam((await params).id);
+  if (id === null) return invalidIdResponse();
 
   const model = sqlite
     .prepare(
@@ -55,7 +57,9 @@ export async function DELETE(
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  const id = Number((await params).id);
+  const id = parseIdParam((await params).id);
+
+  if (id === null) return invalidIdResponse();
   const model = sqlite
     .prepare("SELECT code, name FROM models WHERE id = ? AND tenant_id = ?")
     .get(id, session.tenantId) as { code: string; name: string } | undefined;

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { parseIdParam, invalidIdResponse } from "@/lib/route-params";
 import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { getScheduledSync, updateScheduledSync, deleteScheduledSync } from "@/lib/scheduled-sync";
@@ -20,7 +21,9 @@ export async function PATCH(
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   if (session.role !== "admin") return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
-  const id = Number((await params).id);
+  const id = parseIdParam((await params).id);
+
+  if (id === null) return invalidIdResponse();
   const existing = getScheduledSync(id);
   if (!existing || existing.tenantId !== session.tenantId) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
@@ -42,7 +45,9 @@ export async function DELETE(
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   if (session.role !== "admin") return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
-  const id = Number((await params).id);
+  const id = parseIdParam((await params).id);
+
+  if (id === null) return invalidIdResponse();
   const existing = getScheduledSync(id);
   if (!existing || existing.tenantId !== session.tenantId) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });

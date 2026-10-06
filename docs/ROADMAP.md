@@ -132,7 +132,7 @@ Sprint 3.1/3.2/3.3'ün diğer tüm maddeleri tamamlandı — **Faz 3 bu haliyle 
 | 9 | Bildirim sistemi (yorum/mention, onay bekleyen görev) | **Tamamlandı (Sprint 2.3 devam, in-app)** — e-posta kapsam dışı | Tüm BI araçları | Faz 2 |
 | 10 | Gelişmiş formül fonksiyonları (IF, SUMIF, zaman-ofseti) | **Tamamlandı (Sprint 2.2 + 2.3 devam)** | Excel, Anaplan formula engine | Faz 2 |
 | 11 | Veri doğrulama / business rules | **Tamamlandı (Sprint 2.2)** | Tüm EPM araçları | Faz 2 |
-| 12 | API rate limiting + input sanitization tutarlılığı | **Kısmen** — rate limit `proxy.ts`'te sadece 5 kritik endpoint için (login/ai/export/signup/odata), ~61 route'un 32'si zod ile doğrulanıyor; tam tutarlılık yok | — | Faz 0 |
+| 12 | API rate limiting + input sanitization tutarlılığı | **Tamamlandı (2026-06-10)** — tüm `/api/*` için taban rate limit + tüm `[id]` route'larında tutarlı 400 (bkz. Faz 0 tamamlama notları) | — | Faz 0 |
 
 ## Nice-to-Have Özellik Listesi
 
@@ -166,6 +166,15 @@ Sprint 3.1/3.2/3.3'ün diğer tüm maddeleri tamamlandı — **Faz 3 bu haliyle 
   - `src/components/ReportView.tsx`
   - `src/components/Sidebar.tsx`
   - `next build` bu kuralları çalıştırmıyor (build başarılı), yalnızca `npm run lint`/CI'daki lint adımı kırmızı çıkıyor. Faz 1'e "React Compiler lint borcu temizliği" olarak eklenmeli.
+
+### Faz 0 — Madde 12 tamamlama notu: rate limiting + input sanitization tutarlılığı (2026-06-10)
+
+- **Önce tespit edilen durum:** rate limit `proxy.ts`'te sadece 5 özel kural için uygulanıyordu (login/ai/export/signup/odata) — ~61 route dosyasının geri kalan ~56'sı korumasızdı. Ayrıca `[id]` dinamik route segmentleri (`Number((await params).id)`) 19 dosyada NaN kontrolü yapmadan doğrudan SQL'e bind ediliyordu — geçersiz bir id (örn. `/api/models/abc`) better-sqlite3'ten yakalanmamış bir `TypeError` fırlatıp genel 500 sayfası döndürüyordu (temiz 400 değil).
+- **Rate limiting genişletmesi:** `proxy.ts`'e özel kurallara girmeyen tüm `/api/*` istekleri için IP bazlı bir **taban kural** eklendi (`DEFAULT_API_RATE_LIMIT`: 5 dakikada 300 istek) — özel kurallar (login/ai/export/signup/odata) kendi daha sıkı limitlerini korur, bu sadece onların dışında kalan rotalara bir taban oluşturur. Mimari karar: tek bir global middleware kuralı, 61 route'un her birine ayrı ayrı rate-limit entegrasyonu YAPILMADI — mevcut desenle (zaten `proxy.ts` merkezi) tutarlı, bakımı tek yerden yapılabilir bir çözüm.
+- **Input sanitization — `[id]` route'ları:** yeni `lib/route-params.ts` (`parseIdParam`/`invalidIdResponse`) — sadece pozitif tam sayı dizgelerini kabul eder, aksi halde tutarlı `400 invalid_id` döner. **19 route dosyası** (`api-keys/[id]`, `dashboards/[id]`, `reports/[id]`, `users/[id]` + `/access`, `comments/[id]`, `fact-audit/[id]/rollback`, `uploads/[id]/revert`, `scheduled-syncs/[id]` + `/run`, `connector-configs/[id]`, `business-rules/[id]`, `workflow/[id]` + `/transition`, `members/[id]`, `dimensions/[id]` + `/members`, `models/[id]`, `notifications/[id]`) toplu olarak bu yardımcıyı kullanacak şekilde güncellendi.
+- **Diğer küçük tutarlılık düzeltmeleri:** `/api/notifications` POST'taki elle yapılan `body?.action !== "markAllRead"` kontrolü `zod` (`z.literal`) ile değiştirildi; `lib/notifications.ts`'teki `listNotifications` limit parametresi artık `Number.isFinite` ile korunuyor (önceden geçersiz/NaN bir `limit` query param'ı aynı şekilde yakalanmamış SQL hatası riski taşıyordu).
+- **Kapsam dışı bırakılanlar (gerekçeli):** `/api/upload` (multipart `FormData` + `File` alır) zaten kapsamlı elle doğrulama içeriyor — zod `FormData`/`File` için doğal bir uyum sağlamıyor, dokunulmadı. Export route'ları (`/api/export/excel`, `/api/export/pptx`) ve diğer ~30 route zaten `zod`/`exportPayloadSchema` ile doğrulanıyordu, bu çalışmanın kapsamına girmedi.
+- 11 yeni test: `route-params.test.ts` (4 — geçerli/negatif/sayı-olmayan/NaN-Infinity dizgeleri) + `rate-limit.test.ts` (7 — token-bucket, bağımsız anahtarlar, pencere sıfırlama, `clientIp` başlık öncelik sırası) — toplam **286 test**. Lint/typecheck/build hepsi temiz.
 
 ### Sprint 2.1 tamamlama notu (2026-06-10)
 

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { parseIdParam, invalidIdResponse } from "@/lib/route-params";
 import { getSession } from "@/lib/auth";
 import { getFactAuditEntry, rollbackFactAudit, FactAuditNotFoundError } from "@/lib/fact-audit";
 import { getModelTenantId } from "@/lib/model";
@@ -14,7 +15,9 @@ export async function POST(
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   if (session.role === "viewer") return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
-  const id = Number((await params).id);
+  const id = parseIdParam((await params).id);
+
+  if (id === null) return invalidIdResponse();
   const entry = getFactAuditEntry(id);
   if (!entry || getModelTenantId(entry.modelId) !== session.tenantId) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });

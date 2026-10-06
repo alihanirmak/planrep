@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { parseIdParam, invalidIdResponse } from "@/lib/route-params";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { db, users, sqlite } from "@/lib/db";
@@ -31,7 +32,8 @@ export async function PATCH(
   if (!session || session.role !== "admin") {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
-  const id = Number((await params).id);
+  const id = parseIdParam((await params).id);
+  if (id === null) return invalidIdResponse();
   const parsed = patchSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success || Number.isNaN(id)) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
@@ -85,7 +87,8 @@ export async function DELETE(
   if (!session || session.role !== "admin") {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
-  const id = Number((await params).id);
+  const id = parseIdParam((await params).id);
+  if (id === null) return invalidIdResponse();
   if (Number.isNaN(id)) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
   }

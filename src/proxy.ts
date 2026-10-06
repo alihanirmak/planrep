@@ -59,6 +59,13 @@ const RATE_LIMIT_RULES: Array<{
   },
 ];
 
+// Yukaridaki ozel kurallara girmeyen tum diger /api/* uclari icin IP bazli
+// kaba taneli bir taban limit (madde 12 — "API rate limiting tutarliligi"
+// acigi: eskiden rate limit sadece 5 ozel endpoint'te uygulaniyordu, kalan
+// ~56 route hic korumasizdi). Ozel kurallar zaten kendi daha siki limitlerini
+// uyguladigindan burada tekrar calismaz (asagida `else if` ile ayristirilir).
+const DEFAULT_API_RATE_LIMIT = { limit: 300, windowMs: 5 * 60 * 1000 };
+
 function tooManyRequests(resetAt: number) {
   return NextResponse.json(
     { error: "rate_limited" },
@@ -76,6 +83,13 @@ export async function proxy(req: NextRequest) {
   const rule = RATE_LIMIT_RULES.find((r) => r.test(pathname, method));
   if (rule) {
     const result = rateLimit(`${rule.name}:${clientIp(req)}`, rule.limit, rule.windowMs);
+    if (!result.allowed) return tooManyRequests(result.resetAt);
+  } else if (pathname.startsWith("/api/")) {
+    const result = rateLimit(
+      `api:${clientIp(req)}`,
+      DEFAULT_API_RATE_LIMIT.limit,
+      DEFAULT_API_RATE_LIMIT.windowMs
+    );
     if (!result.allowed) return tooManyRequests(result.resetAt);
   }
 

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { parseIdParam, invalidIdResponse } from "@/lib/route-params";
 import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { sqlite } from "@/lib/db";
@@ -36,7 +37,8 @@ export async function GET(
 ) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  const id = Number((await params).id);
+  const id = parseIdParam((await params).id);
+  if (id === null) return invalidIdResponse();
   const r = getDashboard(id, session.tenantId);
   if (!r) return NextResponse.json({ error: "not_found" }, { status: 404 });
   if (r.owner_id !== session.id && r.shared !== 1) {
@@ -60,7 +62,8 @@ export async function PUT(
 ) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  const id = Number((await params).id);
+  const id = parseIdParam((await params).id);
+  if (id === null) return invalidIdResponse();
   const r = getDashboard(id, session.tenantId);
   if (!r) return NextResponse.json({ error: "not_found" }, { status: 404 });
   if (r.owner_id !== session.id) {
@@ -100,7 +103,8 @@ export async function DELETE(
 ) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  const id = Number((await params).id);
+  const id = parseIdParam((await params).id);
+  if (id === null) return invalidIdResponse();
   const r = getDashboard(id, session.tenantId);
   if (!r) return NextResponse.json({ error: "not_found" }, { status: 404 });
   if (r.owner_id !== session.id) {

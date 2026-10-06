@@ -210,3 +210,15 @@ Tamamlanan Faz 3 maddeleri (hepsi ayrı commit):
   zod 61 route'un 32'sinde). Kalan gerçek açık maddeler: madde 5 (satır-seviyesi
   güvenlik için ayrı admin UI yok, hâlâ Users sayfasına gömülü) ve madde 12'nin
   tam kapsaması.
+
+- **Madde 12 (rate limit + input sanitization tutarlılığı) tamamlandı
+  (2026-06-10):** `proxy.ts`'e tüm `/api/*` için IP bazlı taban rate limit
+  eklendi (özel 5 kural dışındaki ~56 route artık korumasız değil). Yeni
+  `lib/route-params.ts` (`parseIdParam`/`invalidIdResponse`) ile 19 `[id]`
+  route dosyası toplu güncellendi — artık geçersiz id (örn. harf) 500 yerine
+  temiz `400 invalid_id` döner (önceden better-sqlite3 NaN bind hatasıyla
+  yakalanmamış 500 veriyordu). `/api/notifications` POST zod'a geçirildi,
+  `listNotifications` limit parametresi NaN'a karşı korundu. 11 yeni test
+  (`route-params.test.ts`, `rate-limit.test.ts`) — toplam **286 test**.
+  Lint/typecheck/build temiz. Must-Have tablosu madde 12 "Tamamlandı"
+  işaretlendi. **Henüz commit edilmedi, sıradaki adım commit+push.**

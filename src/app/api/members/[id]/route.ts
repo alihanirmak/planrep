@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { parseIdParam, invalidIdResponse } from "@/lib/route-params";
 import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { sqlite } from "@/lib/db";
@@ -41,7 +42,9 @@ export async function PATCH(
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   if (session.role === "viewer") return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
-  const id = Number((await params).id);
+  const id = parseIdParam((await params).id);
+
+  if (id === null) return invalidIdResponse();
   const row = sqlite
     .prepare(
       `SELECT dm.id, dm.dimension_id AS dimensionId FROM dimension_members dm
@@ -92,7 +95,9 @@ export async function DELETE(
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   if (session.role === "viewer") return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
-  const id = Number((await params).id);
+  const id = parseIdParam((await params).id);
+
+  if (id === null) return invalidIdResponse();
   const row = sqlite
     .prepare(
       `SELECT dm.id FROM dimension_members dm

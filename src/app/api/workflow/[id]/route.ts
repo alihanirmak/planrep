@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { parseIdParam, invalidIdResponse } from "@/lib/route-params";
 import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import {
@@ -16,7 +17,8 @@ export async function GET(
 ) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  const id = Number((await params).id);
+  const id = parseIdParam((await params).id);
+  if (id === null) return invalidIdResponse();
   const item = getWorkflowItem(id);
   if (!item || item.tenantId !== session.tenantId) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
@@ -37,7 +39,8 @@ export async function PATCH(
 ) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  const id = Number((await params).id);
+  const id = parseIdParam((await params).id);
+  if (id === null) return invalidIdResponse();
   const item = getWorkflowItem(id);
   if (!item || item.tenantId !== session.tenantId) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
@@ -66,7 +69,8 @@ export async function DELETE(
 ) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  const id = Number((await params).id);
+  const id = parseIdParam((await params).id);
+  if (id === null) return invalidIdResponse();
   const item = getWorkflowItem(id);
   if (!item || item.tenantId !== session.tenantId) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
