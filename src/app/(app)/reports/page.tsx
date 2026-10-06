@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   createPivotEngine,
@@ -25,6 +25,7 @@ import PivotGrid, { STYLE_CLASS } from "@/components/PivotGrid";
 import MemberPicker from "@/components/MemberPicker";
 import DrillModal from "@/components/DrillModal";
 import { getT, readLocaleClient } from "@/lib/i18n";
+import { useVersionConflict } from "@/lib/hooks/useVersionConflict";
 
 type Dim = PivotDim & { id: number; slot: number };
 type Model = { id: number; code: string; name: string; dims: Dim[] };
@@ -227,6 +228,17 @@ export default function ReportsPage() {
   const [isMine, setIsMine] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
   const [mode, setMode] = useState<"edit" | "view">("edit");
+
+  const fetchLatestReport = useCallback(async (id: number) => {
+    const res = await fetch(`/api/reports/${id}`);
+    if (!res.ok) return null;
+    return (await res.json()) as { version: number };
+  }, []);
+  const versionGuard = useVersionConflict({
+    entityId: currentId,
+    isMine,
+    fetchLatest: fetchLatestReport,
+  });
 
   const [modelId, setModelId] = useState<number | null>(null);
   const [rowsZone, setRowsZone] = useState<string[]>([]);
@@ -540,6 +552,7 @@ export default function ReportsPage() {
     setCurrentId(r.id);
     setShared(r.shared);
     setIsMine(r.mine);
+    versionGuard.syncVersion(r.version);
     applyDef(def, r.name);
     loadComments(r.id);
     setMode("view");
@@ -547,18 +560,35 @@ export default function ReportsPage() {
     if (m) runWith(m, def.rows, def.cols, def.filters);
   }
 
-  async function save() {
+  async function save(force = false) {
     const def = currentDef();
     if (!def) return;
     setMsg(null);
-    const payload = { name: reportName, definition: def, shared };
+    const payload = {
+      name: reportName,
+      definition: def,
+      shared,
+      ...(force ? {} : { expectedVersion: versionGuard.knownVersion ?? undefined }),
+    };
     if (currentId != null && isMine) {
       const res = await fetch(`/api/reports/${currentId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      setMsg(res.ok ? "✅ Güncellendi" : "Kaydetme başarısız");
+      if (res.status === 409) {
+        const body = await res.json().catch(() => null);
+        if (body?.current) versionGuard.handleConflict(body.current);
+        setMsg(t("collab.conflictShort"));
+        return;
+      }
+      if (res.ok) {
+        const body = await res.json().catch(() => ({}));
+        if (typeof body.version === "number") versionGuard.syncVersion(body.version);
+        setMsg("✅ Güncellendi");
+      } else {
+        setMsg("Kaydetme başarısız");
+      }
     } else {
       const res = await fetch("/api/reports", {
         method: "POST",
@@ -569,6 +599,7 @@ export default function ReportsPage() {
         const body = await res.json();
         setCurrentId(body.id);
         setIsMine(true);
+        versionGuard.syncVersion(1);
         setMsg("✅ Kaydedildi");
       } else setMsg("Kaydetme başarısız");
     }
@@ -580,6 +611,18 @@ export default function ReportsPage() {
     await fetch(`/api/reports/${currentId}`, { method: "DELETE" });
     newReport();
     loadSavedList();
+  }
+
+  // --- Coklu-kullanici cakisma cozumleri (bkz. lib/hooks/useVersionConflict.ts) ---
+  function conflictOverwrite() {
+    save(true);
+  }
+  function conflictReload() {
+    if (currentId != null) loadReport(currentId);
+  }
+  function remoteUpdateReload() {
+    if (currentId != null) loadReport(currentId);
+    versionGuard.dismissRemoteUpdated();
   }
 
   // --- Yorumlar ---
@@ -782,6 +825,41 @@ export default function ReportsPage() {
 
   return (
     <div className="flex h-full flex-col">
+      {/* COKLU-KULLANICI CAKISMA/GUNCELLEME BILDIRIMLERI */}
+      {versionGuard.conflict && (
+        <div className="mb-2 flex items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 print:hidden">
+          <span>⚠️ {t("collab.conflictBanner")}</span>
+          <button
+            onClick={conflictReload}
+            className="ml-auto rounded-lg bg-white px-3 py-1 text-xs font-medium text-amber-800 shadow-sm hover:bg-amber-100"
+          >
+            {t("collab.reloadTheirs")}
+          </button>
+          <button
+            onClick={conflictOverwrite}
+            className="rounded-lg bg-amber-600 px-3 py-1 text-xs font-medium text-white hover:bg-amber-700"
+          >
+            {t("collab.overwriteMine")}
+          </button>
+        </div>
+      )}
+      {!versionGuard.conflict && versionGuard.remoteUpdated && (
+        <div className="mb-2 flex items-center gap-3 rounded-xl border border-blue-300 bg-blue-50 px-3 py-2 text-sm text-blue-800 print:hidden">
+          <span>ℹ️ {t("collab.remoteUpdateBanner")}</span>
+          <button
+            onClick={remoteUpdateReload}
+            className="ml-auto rounded-lg bg-white px-3 py-1 text-xs font-medium text-blue-800 shadow-sm hover:bg-blue-100"
+          >
+            {t("collab.reloadTheirs")}
+          </button>
+          <button
+            onClick={versionGuard.dismissRemoteUpdated}
+            className="rounded-lg px-3 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
+          >
+            {t("collab.dismiss")}
+          </button>
+        </div>
+      )}
       {/* ARAC CUBUGU */}
       <div className="flex flex-wrap items-center gap-1.5 rounded-xl bg-white px-3 py-2 shadow-sm print:hidden">
         <select
@@ -809,7 +887,7 @@ export default function ReportsPage() {
         )}
 
         <span className="mx-1 h-5 w-px bg-slate-200" />
-        <IconBtn icon="💾" title={currentId != null && isMine ? "Güncelle" : "Kaydet"} onClick={save} />
+        <IconBtn icon="💾" title={currentId != null && isMine ? "Güncelle" : "Kaydet"} onClick={() => save()} />
         <IconBtn icon="🔗" title="Paylaş (aç/kapat)" active={shared} onClick={() => setShared(!shared)} />
         {currentId != null && (
           <IconBtn

@@ -144,6 +144,12 @@ export const reports = sqliteTable("reports", {
   modelId: integer("model_id").notNull(),
   definition: text("definition").notNull(),
   shared: integer("shared").notNull().default(0),
+  // Optimistic concurrency: her basarili PUT 1 artirir. Istemci son GET'te
+  // aldigi versiyonu PUT govdesinde geri gonderir; sunucudaki versiyon
+  // uyusmazsa (araya baska bir yazma girmis) 409 donulur — bkz.
+  // api/reports/[id]/route.ts. Boylece iki kullanicinin birbirinin
+  // degisikligini sessizce ezmesi (lost update) onlenir.
+  version: integer("version").notNull().default(1),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
 });
@@ -155,6 +161,8 @@ export const dashboards = sqliteTable("dashboards", {
   ownerId: integer("owner_id").notNull(),
   definition: text("definition").notNull(),
   shared: integer("shared").notNull().default(0),
+  // bkz. reports.version ustundeki not — ayni optimistic concurrency semantigi.
+  version: integer("version").notNull().default(1),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
 });

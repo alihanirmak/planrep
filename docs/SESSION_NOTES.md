@@ -89,6 +89,28 @@
   Lint/typecheck/build temiz. **Henüz commit edilmedi** — kullanıcı
   onayı bekleniyor, sonra Sprint 3.2 madde 3 (real-time collaboration)
   için onay istenecek.
+- Redis caching commit edildi ve push edildi (`a5d9ff4`, origin/main
+  güncel).
+- Sprint 3.2 madde 3 (real-time collaboration) bu oturumda implemente
+  edildi — kullanıcı "çok karmaşıksa alt maddelere böl" dediği için
+  mimari karar + schema + API + hook + 2 sayfa client entegrasyonu
+  olarak alt-adımlara bölündü. **Mimari karar: WebSocket DEĞİL**
+  — proje `next start` ile dağıtılan standart bir App Router uygulaması,
+  kalıcı WebSocket sunucusu dağıtım modelini kökten değiştirirdi; kod
+  tabanında zaten WebSocket/SSE altyapısı yoktu (incelenip doğrulandı),
+  tek "canlı güncelleme" idiomu NotificationBell.tsx'teki setInterval
+  polling'di. Bunun yerine: `reports`/`dashboards`'a `version` kolonu +
+  `lib/version-guard.ts` (`versionedUpdate` — 409 Conflict ile
+  lost-update önleme) + `lib/hooks/useVersionConflict.ts` (409→conflict
+  banner + 20sn polling→"başkası güncelledi" banner) + her iki sayfaya
+  entegrasyon. `next dev`'e karşı manuel doğrulama: doğru versiyonla PUT
+  200, eski versiyonla ikinci PUT 409 (current.version doğru). 5 yeni
+  test — toplam **245 test**. Lint (React Compiler ref kuralı ihlali
+  tekrar bulunup düzeltildi)/typecheck/build temiz. **Henüz commit
+  edilmedi** — kullanıcı onayı bekleniyor.
+- Sprint 3.2'nin TÜMÜ (virtualized grid + Redis caching + real-time
+  collaboration) artık tamamlandı. Sıradaki: Sprint 3.3 madde 1 (BI
+  export API) için onay istenecek.
 
 ---
 

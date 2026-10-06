@@ -88,6 +88,7 @@ CREATE TABLE IF NOT EXISTS reports (
   model_id INTEGER NOT NULL,
   definition TEXT NOT NULL,
   shared INTEGER NOT NULL DEFAULT 0,
+  version INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -98,6 +99,7 @@ CREATE TABLE IF NOT EXISTS dashboards (
   owner_id INTEGER NOT NULL,
   definition TEXT NOT NULL,
   shared INTEGER NOT NULL DEFAULT 0,
+  version INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -260,6 +262,8 @@ for (const migration of [
   "ALTER TABLE business_rules ADD COLUMN tenant_id INTEGER NOT NULL DEFAULT 1",
   "ALTER TABLE connector_configs ADD COLUMN tenant_id INTEGER NOT NULL DEFAULT 1",
   "ALTER TABLE scheduled_syncs ADD COLUMN tenant_id INTEGER NOT NULL DEFAULT 1",
+  "ALTER TABLE reports ADD COLUMN version INTEGER NOT NULL DEFAULT 1",
+  "ALTER TABLE dashboards ADD COLUMN version INTEGER NOT NULL DEFAULT 1",
 ]) {
   try {
     sqlite.exec(migration);

@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import DashboardWidget, { type Widget, type WidgetType } from "@/components/DashboardWidget";
 import MemberPicker from "@/components/MemberPicker";
 import { migrateDef } from "@/lib/report-types";
 import { getT, readLocaleClient } from "@/lib/i18n";
 import type { Member } from "@/lib/pivot";
+import { useVersionConflict } from "@/lib/hooks/useVersionConflict";
 
 type Dim = { id: number; code: string; name: string; members: Member[] };
 type Model = { id: number; code: string; name: string; dims: Dim[] };
@@ -36,6 +37,17 @@ export default function DashboardsPage() {
   const [globalDims, setGlobalDims] = useState<string[]>([]);
   const [globalFilters, setGlobalFilters] = useState<Record<string, string[]>>({});
   const [msg, setMsg] = useState<string | null>(null);
+
+  const fetchLatestDashboard = useCallback(async (id: number) => {
+    const res = await fetch(`/api/dashboards/${id}`);
+    if (!res.ok) return null;
+    return (await res.json()) as { version: number };
+  }, []);
+  const versionGuard = useVersionConflict({
+    entityId: currentId,
+    isMine,
+    fetchLatest: fetchLatestDashboard,
+  });
 
   const [showForm, setShowForm] = useState(false);
   const [source, setSource] = useState<"manual" | "report">("manual");
@@ -102,21 +114,39 @@ export default function DashboardsPage() {
     setName(d.name);
     setShared(d.shared);
     setIsMine(d.mine);
+    versionGuard.syncVersion(d.version);
     setWidgets(d.definition?.widgets ?? []);
     setGlobalDims(d.definition?.globalDims ?? []);
     setGlobalFilters(d.definition?.globalFilters ?? {});
   }
 
-  async function save() {
+  async function save(force = false) {
     setMsg(null);
-    const payload = { name, definition: { widgets, globalDims, globalFilters }, shared };
+    const payload = {
+      name,
+      definition: { widgets, globalDims, globalFilters },
+      shared,
+      ...(force ? {} : { expectedVersion: versionGuard.knownVersion ?? undefined }),
+    };
     if (currentId != null && isMine) {
       const res = await fetch(`/api/dashboards/${currentId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      setMsg(res.ok ? "✅ Güncellendi" : "Kaydetme başarısız");
+      if (res.status === 409) {
+        const body = await res.json().catch(() => null);
+        if (body?.current) versionGuard.handleConflict(body.current);
+        setMsg(t("collab.conflictShort"));
+        return;
+      }
+      if (res.ok) {
+        const body = await res.json().catch(() => ({}));
+        if (typeof body.version === "number") versionGuard.syncVersion(body.version);
+        setMsg("✅ Güncellendi");
+      } else {
+        setMsg("Kaydetme başarısız");
+      }
     } else {
       const res = await fetch("/api/dashboards", {
         method: "POST",
@@ -127,6 +157,7 @@ export default function DashboardsPage() {
         const body = await res.json();
         setCurrentId(body.id);
         setIsMine(true);
+        versionGuard.syncVersion(1);
         setMsg("✅ Kaydedildi");
       } else setMsg("Kaydetme başarısız");
     }
@@ -138,6 +169,18 @@ export default function DashboardsPage() {
     await fetch(`/api/dashboards/${currentId}`, { method: "DELETE" });
     newDashboard();
     loadList();
+  }
+
+  // --- Coklu-kullanici cakisma cozumleri (bkz. lib/hooks/useVersionConflict.ts) ---
+  function conflictOverwrite() {
+    save(true);
+  }
+  function conflictReload() {
+    if (currentId != null) loadDashboard(currentId);
+  }
+  function remoteUpdateReload() {
+    if (currentId != null) loadDashboard(currentId);
+    versionGuard.dismissRemoteUpdated();
   }
 
   async function addWidget() {
@@ -209,6 +252,40 @@ export default function DashboardsPage() {
 
   return (
     <div>
+      {versionGuard.conflict && (
+        <div className="mb-3 flex items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          <span>⚠️ {t("collab.conflictBanner")}</span>
+          <button
+            onClick={conflictReload}
+            className="ml-auto rounded-lg bg-white px-3 py-1 text-xs font-medium text-amber-800 shadow-sm hover:bg-amber-100"
+          >
+            {t("collab.reloadTheirs")}
+          </button>
+          <button
+            onClick={conflictOverwrite}
+            className="rounded-lg bg-amber-600 px-3 py-1 text-xs font-medium text-white hover:bg-amber-700"
+          >
+            {t("collab.overwriteMine")}
+          </button>
+        </div>
+      )}
+      {!versionGuard.conflict && versionGuard.remoteUpdated && (
+        <div className="mb-3 flex items-center gap-3 rounded-xl border border-blue-300 bg-blue-50 px-3 py-2 text-sm text-blue-800">
+          <span>ℹ️ {t("collab.remoteUpdateBanner")}</span>
+          <button
+            onClick={remoteUpdateReload}
+            className="ml-auto rounded-lg bg-white px-3 py-1 text-xs font-medium text-blue-800 shadow-sm hover:bg-blue-100"
+          >
+            {t("collab.reloadTheirs")}
+          </button>
+          <button
+            onClick={versionGuard.dismissRemoteUpdated}
+            className="rounded-lg px-3 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
+          >
+            {t("collab.dismiss")}
+          </button>
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-bold text-slate-800">{t("nav.dashboards")}</h1>
         <select
@@ -237,7 +314,7 @@ export default function DashboardsPage() {
           <input type="checkbox" checked={shared} onChange={(e) => setShared(e.target.checked)} />
           {t("common.share")} 🔗
         </label>
-        <button onClick={save} className="rounded-lg bg-slate-800 px-4 py-1.5 text-sm font-semibold text-white hover:bg-slate-700">
+        <button onClick={() => save()} className="rounded-lg bg-slate-800 px-4 py-1.5 text-sm font-semibold text-white hover:bg-slate-700">
           💾 {currentId != null && isMine ? t("common.update") : t("common.save")}
         </button>
         {currentId != null && isMine && (
