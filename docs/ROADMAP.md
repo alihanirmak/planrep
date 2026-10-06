@@ -72,7 +72,7 @@
 > Sıralama: önce commit'e girmemiş/yarım kalan küçük teknik borçlar (1-3), sonra orijinal Sprint 2.3'ün kalan 3 maddesi orijinal sırasıyla (4-6).
 
 1. [x] a11y iyileştirmelerini bitir ve commit'e al — `src/lib/a11y.ts` (`useEscapeKey`/`useFocusTrap`) ile `MemberPicker`/`DrillModal` entegrasyonu zaten yazılmış ama commit'e girmemiş (`git status`); kalan iş: drag-and-drop alanlarına (`reports/page.tsx`, `dashboards/page.tsx`) klavye eşdeğeri eklemek, sonra commit. — ✅ tamamlandı (2026-06-10, commit `820c007`): `reports/page.tsx`'teki boyut sıralama alanına (`DimChip`/`DropZone`) ok tuşlarıyla taşıma eklendi (↑/↓ bölge içi sıralama, ←/→ bölgeler arası taşıma, `role="button"`+`tabIndex`+`aria-label`); `dashboards/page.tsx`/`DashboardWidget.tsx`'teki widget sıralamasına ◀/▶ klavye-erişilebilir butonları eklendi. Lint/typecheck/test (112/112)/build temiz.
-2. [ ] Formül motoruna `SUMIF` ekle — `lib/formula.ts`'e `SUMIF(aralık;koşul)` fonksiyonu (Sprint 2.2'den kalan tek eksik parça).
+2. [x] Formül motoruna `SUMIF` ekle — `lib/formula.ts`'e `SUMIF(aralık;koşul)` fonksiyonu (Sprint 2.2'den kalan tek eksik parça). — ✅ tamamlandı (2026-06-10, commit `347d0ae`): `SUMIF(kosul1;deger1;kosul2;deger2;...)` eklendi — bu DSL'de "range" kavramı olmadığından (formüller tek satırın skalar kolon değerleri üzerinde çalışır), Excel SUMIF'in bu modele uyarlanmış karşılığı kosul/değer ikilileri şeklinde tasarlandı. 11 yeni test (toplam 123). Lint/typecheck/build temiz.
 3. [ ] `/api/pivot`, `/api/query`'ye gerçek sayfalama ekle — şu an sert üst sınır (`400 result_too_large`) var ama page/pageSize tabanlı gerçek sayfalama yok (Sprint 1.2'den kalan).
 4. [ ] i18n'i tam kapsama al — export dosyaları (PPTX/Excel başlık/etiketler) ve tüm hata mesajları `getT()` üzerinden çözülecek şekilde güncellenmeli.
 5. [ ] Bildirim sistemi (yorum/mention, onay bekleyen görev) — en azından in-app, sonra e-posta.
@@ -118,7 +118,7 @@
 | 7 | Test altyapısı + CI/CD + versiyon kontrolü | Üretim güvenilirliği için olmazsa olmaz | — | Faz 0/1 |
 | 8 | Yedekleme/Disaster Recovery stratejisi | Tek SQLite dosyası, yedekleme yok | — | Faz 1 |
 | 9 | Bildirim sistemi (yorum/mention, onay bekleyen görev) | Yorum var, bildirim/mail yok | Tüm BI araçları | Faz 2 |
-| 10 | Gelişmiş formül fonksiyonları (IF, SUMIF, zaman-ofseti) | **Kısmen tamamlandı (Sprint 2.2):** IF/SUM/AVG/MIN/MAX + zaman-ofseti çalışıyor, SUMIF eksik (Sprint 2.3 devam) | Excel, Anaplan formula engine | Faz 2 |
+| 10 | Gelişmiş formül fonksiyonları (IF, SUMIF, zaman-ofseti) | **Tamamlandı (Sprint 2.2 + 2.3 devam)** | Excel, Anaplan formula engine | Faz 2 |
 | 11 | Veri doğrulama / business rules | **Tamamlandı (Sprint 2.2)** | Tüm EPM araçları | Faz 2 |
 | 12 | API rate limiting + input sanitization tutarlılığı | Güvenlik borcu | — | Faz 0 |
 
