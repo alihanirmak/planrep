@@ -23,8 +23,9 @@ export async function POST(
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
+  let created;
   try {
-    rollbackFactAudit(id, session.id);
+    created = rollbackFactAudit(id, session.id);
   } catch (e) {
     if (e instanceof FactAuditNotFoundError) {
       return NextResponse.json({ error: "not_found" }, { status: 404 });
@@ -44,5 +45,9 @@ export async function POST(
     oldValue: entry.oldValue,
     newValue: entry.newValue,
   });
-  return NextResponse.json({ ok: true });
+  // `entry`: geri alinan ORIJINAL kayit. `created`: bu geri alma isleminin
+  // kendisinin urettigi YENI kayit — hucre bazli undo/redo yiginlari bu
+  // kaydin id'sini zincirleyerek "redo" (bu geri almayi tekrar geri alma)
+  // yapabilir (bkz. lib/fact-audit.ts rollbackFactAudit dokumantasyonu).
+  return NextResponse.json({ ok: true, entry: created });
 }

@@ -31,6 +31,27 @@ describe("matchesHotkey", () => {
       true
     );
   });
+
+  it("shift gerektiren bir kisayol (orn. redo) sadece shift basiliyken eslesir", () => {
+    const redo = { key: "z", mod: true, shift: true };
+    expect(
+      matchesHotkey({ key: "Z", ctrlKey: true, metaKey: false, shiftKey: true }, redo)
+    ).toBe(true);
+    expect(
+      matchesHotkey({ key: "z", ctrlKey: true, metaKey: false, shiftKey: false }, redo)
+    ).toBe(false);
+  });
+
+  it("undo (shift yok) ile redo (shift var) ayni tus olsa da birbirine karismaz", () => {
+    const undo = { key: "z", mod: true };
+    const redo = { key: "z", mod: true, shift: true };
+    const undoEvent = { key: "z", ctrlKey: true, metaKey: false, shiftKey: false };
+    const redoEvent = { key: "Z", ctrlKey: true, metaKey: false, shiftKey: true };
+    expect(matchesHotkey(undoEvent, undo)).toBe(true);
+    expect(matchesHotkey(undoEvent, redo)).toBe(false);
+    expect(matchesHotkey(redoEvent, undo)).toBe(false);
+    expect(matchesHotkey(redoEvent, redo)).toBe(true);
+  });
 });
 
 describe("isEditableTarget", () => {

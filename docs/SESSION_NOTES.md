@@ -254,4 +254,21 @@ Tamamlanan Faz 3 maddeleri (hepsi ayrı commit):
   (`ShortcutsHelpModal.tsx`), `Ctrl/Cmd+S` kaydet + `Ctrl/Cmd+Enter` çalıştır
   (reports/dashboards sayfalarındaki mevcut fonksiyonlara bağlandı, GitHub
   tarzı "g sonra r" dizileri kasıtlı olarak eklenmedi). 6 yeni test — toplam
-  **294 test**. Lint/typecheck/build temiz. Commit+push edildi (sıradaki adım).
+  **294 test**. Lint/typecheck/build temiz. Commit+push edildi (8f777e1).
+
+- **Nice-to-Have: Hücre düzeyinde undo/redo (Ctrl+Z) tamamlandı (2026-06-10):**
+  Projede hiç inline fact düzenleme UI'ı yoktu — `/browser` sayfasına "Değer"
+  hücresine tıkla-düzenle eklendi (yeni `PATCH /api/facts/[id]`, mevcut
+  `upsertFacts`'i tek satırla çağırarak lock/business-rule/fact_audit
+  altyapısını yeniden kullanıyor). `rollbackFactAudit` artık ürettiği YENİ
+  `fact_audit` kaydını döndürüyor (void→FactAuditEntry) — bu, "redo = undo'nun
+  rollback'i" zincirlemesini mümkün kılıyor, ekstra tablo/state gerekmedi.
+  Ctrl/Cmd+Z (undo) + Ctrl/Cmd+Shift+Z veya Ctrl+Y (redo), sayfa-oturumuna
+  özel undo/redo yığını (model/filtre değişince sıfırlanır). `shortcuts.ts`'e
+  `shift` alanı eklendi (Ctrl+Z/Ctrl+Shift+Z ayrımı için). İki yeni React
+  Compiler kuralıyla karşılaşıldı ve çözüldü ("ref render sırasında
+  okunamaz" → useState'e geçildi; "memoization korunamadı" → useCallback
+  kaldırıldı). 6 yeni test — toplam **300 test**. Gerçek `next dev`
+  sunucusuna karşı tam PATCH→undo→redo→cleanup döngüsü doğrulandı.
+  Lint/typecheck/build temiz. **Henüz commit edilmedi, sıradaki adım
+  commit+push.**

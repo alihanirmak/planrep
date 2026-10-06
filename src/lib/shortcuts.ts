@@ -19,6 +19,11 @@ export type HotkeySpec = {
   // true: Ctrl (Windows/Linux) VEYA Cmd (Mac) tuslarindan biri basili olmali.
   // false/undefined: hicbiri basili OLMAMALI (duz tus kisayolu, orn. "?").
   mod?: boolean;
+  // true: Shift de basili olmali (orn. Ctrl+Shift+Z = redo). false/undefined:
+  // Shift basili OLMAMALI. Harf tuslarinda Shift basiliyken e.key zaten
+  // buyuk harfe donusur ("Z") — matchesHotkey bunu kucuk harfe cevirip
+  // karsilastirdigi icin tek ayirt edici alan burada shiftKey bayragidir.
+  shift?: boolean;
 };
 
 export function isEditableTarget(target: EventTarget | null): boolean {
@@ -28,11 +33,12 @@ export function isEditableTarget(target: EventTarget | null): boolean {
   return target.isContentEditable;
 }
 
-type MinimalKeyboardEvent = { key: string; ctrlKey: boolean; metaKey: boolean };
+type MinimalKeyboardEvent = { key: string; ctrlKey: boolean; metaKey: boolean; shiftKey?: boolean };
 
 export function matchesHotkey(e: MinimalKeyboardEvent, spec: HotkeySpec): boolean {
   const modPressed = e.ctrlKey || e.metaKey;
   if (!!spec.mod !== modPressed) return false;
+  if (!!spec.shift !== !!e.shiftKey) return false;
   return e.key.toLowerCase() === spec.key.toLowerCase();
 }
 
@@ -58,5 +64,5 @@ export function useHotkey(
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, spec.key, spec.mod, handler]);
+  }, [enabled, spec.key, spec.mod, spec.shift, handler]);
 }

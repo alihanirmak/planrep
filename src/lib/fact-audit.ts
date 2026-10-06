@@ -82,13 +82,17 @@ export class FactAuditNotFoundError extends Error {
   }
 }
 
-// Tek bir hucre denetim kaydini geri alir:
+// Tek bir hucre denetim kaydini geri alir ve YENI OLUSAN denetim kaydini
+// doner (geri alma islemi de kendi basina bir fact_audit satiri uretir).
+// Donus degeri, cagiran tarafin (orn. "hucre bazli undo/redo yigini")
+// bu geri alma islemini TEKRAR geri alarak zincirleme redo yapabilmesini
+// saglar — her rollback cagrisi, bir onceki durumu YENIDEN tersine cevirir.
 // - oldValue tanimliysa: o degeri tekrar yazar (upsertFacts uzerinden — bu
 //   da yeni bir 'write' kaydi uretir ve lock/is kurali kontrollerinden gecer;
 //   kilitli/kural-ihlalli bir geri alma reddedilir).
 // - oldValue null ise (hucre o degisiklikten once yoktu): satir silinir ve
 //   bu durum 'rollback' kaynakli ayri bir fact_audit kaydiyla belgelenir.
-export function rollbackFactAudit(auditId: number, userId: number | null) {
+export function rollbackFactAudit(auditId: number, userId: number | null): FactAuditEntry {
   const entry = getFactAuditEntry(auditId);
   if (!entry) throw new FactAuditNotFoundError();
   const dims = getModelDims(entry.modelId);
@@ -110,7 +114,10 @@ export function rollbackFactAudit(auditId: number, userId: number | null) {
       userId,
       now
     );
-    return;
+    const newId = (sqlite.prepare("SELECT last_insert_rowid() AS id").get() as { id: number }).id;
+    const created = getFactAuditEntry(newId);
+    if (!created) throw new FactAuditNotFoundError();
+    return created;
   }
 
   const uploadId = Number(
@@ -122,4 +129,14 @@ export function rollbackFactAudit(auditId: number, userId: number | null) {
   );
   const fw: FactWrite = { coords: entry.coords, value: entry.oldValue };
   upsertFacts(entry.modelId, dims, [fw], uploadId, now, userId);
+  // upsertFacts tek satir yaziyor; bu sentetik upload'a ait TEK fact_audit
+  // kaydi upload_id uzerinden kesin olarak bulunabilir (eszamanli diger
+  // kullanici yazmalari farkli upload_id'ler kullanir, karismaz).
+  const row = sqlite
+    .prepare("SELECT id FROM fact_audit WHERE upload_id = ? ORDER BY id DESC LIMIT 1")
+    .get(uploadId) as { id: number } | undefined;
+  if (!row) throw new FactAuditNotFoundError();
+  const created = getFactAuditEntry(row.id);
+  if (!created) throw new FactAuditNotFoundError();
+  return created;
 }

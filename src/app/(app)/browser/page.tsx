@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import MemberPicker from "@/components/MemberPicker";
 import type { Member } from "@/lib/pivot";
 import { getT, readLocaleClient } from "@/lib/i18n";
+import { parseLocaleNumber } from "@/lib/number";
+import { useHotkey } from "@/lib/shortcuts";
 
 type Dim = { id: number; code: string; name: string; members: Member[] };
 type Model = { id: number; code: string; name: string; dims: Dim[] };
@@ -13,6 +15,16 @@ type FactRow = Record<string, string | number | null> & {
   uploadId: number | null;
   updatedAt: string;
 };
+
+// Hucre-bazli undo/redo yigini: sadece bu sayfa oturumunda yapilan
+// duzenlemeleri tutar (sayfa degisince/model-filtre degisince sifirlanir).
+// Her giris, duzenlemenin urettigi fact_audit kaydinin id'sidir — gercek
+// deger geri yukleme mantigi SUNUCUDA (rollbackFactAudit) yasar, istemci
+// sadece hangi denetim kaydinin geri alinacagini zincirler (bkz.
+// lib/fact-audit.ts rollbackFactAudit dokumantasyonu: her rollback cagrisi
+// kendi basina YENI bir kayit uretir, bu yuzden "redo" = o yeni kaydin
+// rollback'i).
+type UndoEntry = { auditId: number };
 
 const nf = new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 2 });
 const PAGE_SIZE = 50;
@@ -29,7 +41,13 @@ export default function BrowserPage() {
   const [role, setRole] = useState<string>("viewer");
   const [msg, setMsg] = useState<string | null>(null);
 
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [draft, setDraft] = useState("");
+  const [undoStack, setUndoStack] = useState<UndoEntry[]>([]);
+  const [redoStack, setRedoStack] = useState<UndoEntry[]>([]);
+
   const model = useMemo(() => models.find((m) => m.id === modelId) ?? null, [models, modelId]);
+  const canEdit = role !== "viewer";
 
   useEffect(() => {
     fetch("/api/models")
@@ -66,6 +84,20 @@ export default function BrowserPage() {
     load(0);
   }, [load]);
 
+  // Model veya filtre degistiginde undo/redo yiginini sifirlar. React'in
+  // resmi "adjusting state during render" deseni kullanilir (useState ile
+  // onceki anahtari saklamak + render icinde kosullu setState) — bir effect
+  // icinde senkron setState'den kaynaklanan React Compiler kuralini ihlal
+  // etmez; useRef render sirasinda okunamadigindan (ayni kural) burada
+  // KASITLI OLARAK useState kullanildi.
+  const scopeKey = `${modelId}:${JSON.stringify(filters)}`;
+  const [prevScopeKey, setPrevScopeKey] = useState(scopeKey);
+  if (scopeKey !== prevScopeKey) {
+    setPrevScopeKey(scopeKey);
+    setUndoStack([]);
+    setRedoStack([]);
+  }
+
   async function deleteSlice() {
     if (modelId == null) return;
     const hasFilter = Object.values(filters).some((v) => v.length > 0);
@@ -84,10 +116,100 @@ export default function BrowserPage() {
     load(0);
   }
 
+  function startEdit(r: FactRow) {
+    if (!canEdit) return;
+    setEditingId(r.id);
+    setDraft(String(r.value));
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setDraft("");
+  }
+
+  async function commitEdit(r: FactRow) {
+    const num = parseLocaleNumber(draft);
+    if (Number.isNaN(num)) {
+      setMsg(t("pg.browser.editFailed"));
+      cancelEdit();
+      return;
+    }
+    if (num === r.value) {
+      cancelEdit();
+      return;
+    }
+    const res = await fetch(`/api/facts/${r.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ value: num }),
+    });
+    const body = await res.json().catch(() => ({}));
+    cancelEdit();
+    if (res.ok && body.auditId != null) {
+      setUndoStack((s) => [...s, { auditId: body.auditId }]);
+      setRedoStack([]);
+      setMsg(t("pg.browser.editSaved"));
+      load(page);
+    } else if (res.status === 423) {
+      setMsg(`🔒 ${body.message ?? "Veri kilitli"}`);
+    } else {
+      setMsg(body.message ?? body.error ?? t("pg.browser.editFailed"));
+    }
+  }
+
+  // undo/redo asagida PLAIN fonksiyon olarak tanimlı; useCallback KASITLI
+  // OLARAK kullanilmadi — `t` her render'da yeni bir fonksiyon referansi
+  // oldugundan (getT(...) her cagrida yeni closure uretir) bagimlilik
+  // dizisine girince React Compiler'in memoization'i koruyamamasina
+  // sebep oluyordu (bkz. reports/dashboards sayfalarindaki ayni karar:
+  // save()/run() de plain fonksiyon, useCallback degil). useHotkey zaten
+  // her render'da handler'i yeniden baglayip eski dinleyiciyi kaldiriyor,
+  // bu ucuz bir islem (sadece addEventListener/removeEventListener).
+  async function undo() {
+    if (undoStack.length === 0) {
+      setMsg(t("pg.browser.nothingToUndo"));
+      return;
+    }
+    const target = undoStack[undoStack.length - 1];
+    setUndoStack(undoStack.slice(0, -1));
+    const res = await fetch(`/api/fact-audit/${target.auditId}/rollback`, { method: "POST" });
+    const body = await res.json().catch(() => ({}));
+    if (res.ok && body.entry?.id != null) {
+      setRedoStack([...redoStack, { auditId: body.entry.id }]);
+      setMsg(t("pg.browser.undoDone"));
+      load(page);
+    } else {
+      setMsg(body.message ?? body.error ?? t("pg.browser.editFailed"));
+    }
+  }
+
+  async function redo() {
+    if (redoStack.length === 0) {
+      setMsg(t("pg.browser.nothingToRedo"));
+      return;
+    }
+    const target = redoStack[redoStack.length - 1];
+    setRedoStack(redoStack.slice(0, -1));
+    const res = await fetch(`/api/fact-audit/${target.auditId}/rollback`, { method: "POST" });
+    const body = await res.json().catch(() => ({}));
+    if (res.ok && body.entry?.id != null) {
+      setUndoStack([...undoStack, { auditId: body.entry.id }]);
+      setMsg(t("pg.browser.redoDone"));
+      load(page);
+    } else {
+      setMsg(body.message ?? body.error ?? t("pg.browser.editFailed"));
+    }
+  }
+
+  useHotkey({ key: "z", mod: true }, () => void undo(), canEdit);
+  useHotkey({ key: "z", mod: true, shift: true }, () => void redo(), canEdit);
+  useHotkey({ key: "y", mod: true }, () => void redo(), canEdit);
+
   return (
     <div>
       <h1 className="text-2xl font-bold text-slate-800">{t("nav.browser")}</h1>
       <p className="mt-1 text-sm text-slate-500">{t("pg.browser.sub")}</p>
+      {canEdit && <p className="mt-1 text-xs text-slate-400">{t("pg.browser.editHint")}</p>}
 
       <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl bg-white p-4 shadow-sm">
         <label className="flex flex-col text-xs text-slate-500">
@@ -152,8 +274,32 @@ export default function BrowserPage() {
                     </span>
                   </td>
                 ))}
-                <td className={`px-4 py-1.5 text-right tabular-nums ${r.value < 0 ? "text-red-600" : ""}`}>
-                  {nf.format(r.value)}
+                <td className="px-4 py-1.5 text-right tabular-nums">
+                  {editingId === r.id ? (
+                    <input
+                      autoFocus
+                      type="text"
+                      value={draft}
+                      onChange={(e) => setDraft(e.target.value)}
+                      onBlur={() => commitEdit(r)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") commitEdit(r);
+                        else if (e.key === "Escape") cancelEdit();
+                      }}
+                      className="w-28 rounded border border-blue-300 px-2 py-0.5 text-right text-sm text-slate-900 outline-none"
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={!canEdit}
+                      onClick={() => startEdit(r)}
+                      className={`tabular-nums ${r.value < 0 ? "text-red-600" : ""} ${
+                        canEdit ? "rounded px-1 hover:bg-blue-50" : ""
+                      }`}
+                    >
+                      {nf.format(r.value)}
+                    </button>
+                  )}
                 </td>
                 <td className="px-4 py-1.5 text-right text-xs text-slate-400">
                   {r.uploadId != null ? `#${r.uploadId}` : "—"}
