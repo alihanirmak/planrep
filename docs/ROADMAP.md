@@ -113,6 +113,16 @@ Sprint 3.1/3.2/3.3'ün diğer tüm maddeleri tamamlandı — **Faz 3 bu haliyle 
 
 - **Anomali tespiti / AI destekli öngörü (forecast) modülü** (Sprint 3.3'ten taşındı, 2026-06-10): Ön araştırma yapıldı — veri kaynağı için mevcut `runQuery(modelId, rowDim, "TIME", filters)` zaman serisi üretmek için yeniden kullanılabilir (`lib/query.ts`), yeni bir veri modeli gerekmiyor. Taslak mimari fikir (henüz onaylanmadı): istatistiksel çekirdek (lineer regresyon trend + hareketli ortalama, z-score/IQR anomali skorlama) + opsiyonel axet-code CLI ile doğal dil açıklama (mevcut `lib/ai/nl2report.ts`'teki "axet varsa kullan, yoksa kural tabanlı yedek" deseniyle aynı). Netleşmesi gereken sorular: (1) gerçek bir ML/istatistik motoru mu yoksa sadece eşik tabanlı uyarı mı isteniyor, (2) bildirim+dashboard widget'ı kapsamda mı yoksa sadece backend/API mi, (3) hangi anomali tanımı önceliği (dönem-dönem sapma mı, bütçe-fiili farkı mı, yoksa ikisi de).
 
+- **Nice-to-Have'den backlog'a taşınan diğer maddeler** (2026-06-10, kullanıcı talebiyle — kapsam netleşmeden sprint'e bağlanmayacak):
+  - **Raporlama:** Çapraz-sekme grafiklerini PDF export, zamanlanmış rapor e-postası, rapor şablon kütüphanesi.
+  - **Dashboard:** Sürükle-bırak grid layout, gerçek zamanlı widget yenileme (polling/WebSocket).
+  - **Collaboration:** Canlı imleç (Figma-style eşzamanlı imleç gösterimi), değişiklik geçmişi diff görünümü (rapor/dashboard tanımları için).
+  - **AI:** Doğal dil ile veri yazma ("Ocak bütçesini %5 artır" gibi komutlarla fact yazma), çoklu dil NLP (şu an sadece TR/EN kural tabanlı `lib/ai/nl2report.ts`).
+  - **Performans:** PostgreSQL + read-replica geçişi (şu an better-sqlite3; `ARCHITECTURE_AUDIT.md` §6'da tetikleyici kriterler tanımlı).
+  - **UX:** Dark mode.
+  - **Güvenlik:** IP allowlist, refresh token yönetimi (şu an JWT access token var, refresh akışı yok).
+  - **DevOps:** Otomatik DB migration genişletmesi (Drizzle Kit ile — şu an `lib/db/index.ts`'te elle yazılmış idempotent `ALTER TABLE`/`CREATE TABLE IF NOT EXISTS` migrasyonları var).
+
 ---
 
 ## Must-Have Özellik Listesi (Kurumsal Planlama Araçlarıyla Kıyaslama)
@@ -136,17 +146,19 @@ Sprint 3.1/3.2/3.3'ün diğer tüm maddeleri tamamlandı — **Faz 3 bu haliyle 
 
 ## Nice-to-Have Özellik Listesi
 
-| Kategori | Özellik | Faz |
-|---|---|---|
-| Raporlama | Çapraz-sekme grafiklerini PDF export, zamanlanmış rapor e-postası, rapor şablon kütüphanesi | 2-3 |
-| Dashboard | Sürükle-bırak grid layout, gerçek zamanlı widget yenileme, mobil responsive görünüm | 3 |
-| Collaboration | @mention bildirimleri (**Tamamlandı — Sprint 2.3 devam**), canlı imleç (Figma-style), değişiklik geçmişi diff görünümü | 3 |
-| AI | Doğal dil ile veri yazma ("Ocak bütçesini %5 artır"), anomali tespiti, çoklu dil NLP | 3 |
-| Entegrasyon | Dinamik connector plugin, OAuth2/SAML SSO, genel REST API, webhook tetikleyiciler | 2-3 |
-| Performans | Redis caching, PostgreSQL + read-replica, sanal kaydırma (virtualized grid) | 1-3 |
-| UX | Dark mode, ~~klavye kısayolları~~ (**Tamamlandı — 2026-06-10**), ~~hücre düzeyinde undo/redo (Ctrl+Z)~~ (**Tamamlandı — 2026-06-10**), PWA/offline-first (**Tamamlandı — Sprint 3.3**) | 2-3 |
-| Güvenlik | 2FA, SSO/Okta/Azure AD, IP allowlist, refresh token yönetimi | 3 |
-| DevOps | Dockerfile + docker-compose, GitHub Actions CI, otomatik DB migration genişletmesi (Drizzle Kit) | 0-1 |
+> **Not (2026-06-10):** Bu tablodaki tamamlanmamış tüm maddeler kullanıcı talebiyle **"Gelecek Yol Haritası (Backlog)"** bölümüne taşındı — aşağıdaki tablo artık sadece referans/özet amaçlı, güncel backlog yukarıdaki bölümdedir.
+
+| Kategori | Özellik | Faz | Durum |
+|---|---|---|---|
+| Raporlama | Çapraz-sekme grafiklerini PDF export, zamanlanmış rapor e-postası, rapor şablon kütüphanesi | 2-3 | Backlog'a taşındı |
+| Dashboard | Sürükle-bırak grid layout, gerçek zamanlı widget yenileme, mobil responsive görünüm | 3 | Mobil responsive **Tamamlandı (Sprint 3.3)**; sürükle-bırak/gerçek-zamanlı yenileme backlog'a taşındı |
+| Collaboration | @mention bildirimleri, canlı imleç (Figma-style), değişiklik geçmişi diff görünümü | 3 | @mention **Tamamlandı (Sprint 2.3 devam)**; canlı imleç/diff backlog'a taşındı |
+| AI | Doğal dil ile veri yazma ("Ocak bütçesini %5 artır"), anomali tespiti, çoklu dil NLP | 3 | Hepsi backlog'a taşındı |
+| Entegrasyon | Dinamik connector plugin, OAuth2/SAML SSO, genel REST API, webhook tetikleyiciler | 2-3 | **Tamamlandı** (connector plugin: Sprint 2.3; OIDC SSO: Sprint 3.1; REST API: Sprint 3.3) |
+| Performans | Redis caching, PostgreSQL + read-replica, sanal kaydırma (virtualized grid) | 1-3 | Redis + virtualized grid **Tamamlandı (Sprint 3.2)**; PostgreSQL+read-replica backlog'a taşındı |
+| UX | Dark mode, klavye kısayolları, hücre düzeyinde undo/redo (Ctrl+Z), PWA/offline-first | 2-3 | Klavye kısayolları + hücre undo/redo + PWA **Tamamlandı (2026-06-10)**; Dark mode backlog'a taşındı |
+| Güvenlik | 2FA, SSO/Okta/Azure AD, IP allowlist, refresh token yönetimi | 3 | 2FA + SSO **Tamamlandı (Sprint 3.1)**; IP allowlist/refresh token backlog'a taşındı |
+| DevOps | Dockerfile + docker-compose, GitHub Actions CI, otomatik DB migration genişletmesi (Drizzle Kit) | 0-1 | Docker + CI **Tamamlandı (Faz 1)**; otomatik migration genişletmesi backlog'a taşındı |
 
 ---
 

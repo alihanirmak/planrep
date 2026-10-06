@@ -10,6 +10,23 @@
 - **Git kullanıcısı**: `alihanirmak` ile ilerlenecek (remote zaten
   `github.com/alihanirmak/planrep.git`).
 
+## Nice-to-Have kalanları backlog'a taşındı + yeni dokümanlar (2026-06-10)
+
+- Kullanıcı, kalan tüm Nice-to-Have maddelerinin (dark mode, sürükle-bırak
+  grid, canlı imleç/diff, doğal dil veri yazma, PostgreSQL+read-replica,
+  IP allowlist/refresh token, otomatik migration genişletmesi) **"Gelecek
+  Yol Haritası (Backlog)"** bölümünde kalmasını istedi — hiçbiri şu an
+  bir sprint'e bağlanmadı. `ROADMAP.md`'deki Nice-to-Have tablosu özet/referans
+  haline getirildi, gerçek backlog listesi "Gelecek Yol Haritası" bölümünde.
+- Kullanıcı ayrıca iki yeni doküman istedi:
+  - `docs/GELISTIRME_OZETI.md` — tüm fazların/sprintlerin anlaşılır Türkçe
+    özeti (ne yapıldı, rakamlarla özet, mimari felsefe, backlog listesi).
+  - `docs/KULLANICI_KILAVUZU.md` — son kullanıcı için 17 bölümlük adım adım
+    kullanım kılavuzu (giriş/2FA/SSO, modelleme, yükleme, veri gözatma +
+    hücre düzenleme/undo-redo, raporlar + formül sözdizimi, dashboardlar,
+    workflow, senaryolar, AI sorgu, entegrasyonlar, bildirimler, hesap
+    güvenliği, admin ekranları, klavye kısayolları, PWA, SSS).
+
 ## 2026-06-10 — Faz 3 / Sprint 3.1 madde 1 (2FA/TOTP) DOĞRULANDI
 
 - Önceki oturumda (bu oturumun başlangıcında geçmişi görünmüyordu — proje git
