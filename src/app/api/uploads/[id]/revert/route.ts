@@ -25,7 +25,7 @@ export async function POST(
   }
 
   const dims = getModelDims(upload.modelId);
-  const restored = revertUpload(id, upload.modelId, dims);
+  const restored = revertUpload(id, upload.modelId, dims, session.id);
 
   logAudit(session.id, "upload.revert", "upload", id, { restored });
   return NextResponse.json({ ok: true, restored });

@@ -181,3 +181,53 @@ export const workflowHistory = sqliteTable(
   },
   (t) => [index("ix_workflow_history_wf").on(t.workflowId)]
 );
+
+// scopeFilters: JSON — Record<dimCode, string[]>; kurahn uygulandigi veri
+// kesiti. "block" ihlal halinde yazmayi reddeder, "warn" sadece bildirir.
+export const businessRules = sqliteTable(
+  "business_rules",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    modelId: integer("model_id").notNull(),
+    name: text("name").notNull(),
+    scopeFilters: text("scope_filters").notNull(),
+    op: text("op", { enum: ["<", ">", "<=", ">=", "=", "<>"] }).notNull(),
+    value: real("value").notNull(),
+    severity: text("severity", { enum: ["block", "warn"] })
+      .notNull()
+      .default("block"),
+    message: text("message"),
+    active: integer("active").notNull().default(1),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (t) => [index("ix_business_rules_model").on(t.modelId)]
+);
+
+// Hucre bazli yazma gecmisi: her upsert/revert/rollback bir satir uretir.
+// oldValue null ise koordinat daha once yoktu (yeni ekleme); newValue null
+// ise satir silindi.
+export const factAudit = sqliteTable(
+  "fact_audit",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    modelId: integer("model_id").notNull(),
+    uploadId: integer("upload_id"),
+    d1: text("d1"),
+    d2: text("d2"),
+    d3: text("d3"),
+    d4: text("d4"),
+    d5: text("d5"),
+    d6: text("d6"),
+    d7: text("d7"),
+    d8: text("d8"),
+    oldValue: real("old_value"),
+    newValue: real("new_value"),
+    source: text("source", { enum: ["write", "revert", "rollback"] })
+      .notNull()
+      .default("write"),
+    userId: integer("user_id"),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [index("ix_fact_audit_model").on(t.modelId), index("ix_fact_audit_upload").on(t.uploadId)]
+);

@@ -142,6 +142,33 @@ CREATE TABLE IF NOT EXISTS workflow_history (
   created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_workflow_history_wf ON workflow_history(workflow_id);
+CREATE TABLE IF NOT EXISTS business_rules (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  model_id INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  scope_filters TEXT NOT NULL,
+  op TEXT NOT NULL,
+  value REAL NOT NULL,
+  severity TEXT NOT NULL DEFAULT 'block',
+  message TEXT,
+  active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_business_rules_model ON business_rules(model_id);
+CREATE TABLE IF NOT EXISTS fact_audit (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  model_id INTEGER NOT NULL,
+  upload_id INTEGER,
+  d1 TEXT, d2 TEXT, d3 TEXT, d4 TEXT, d5 TEXT, d6 TEXT, d7 TEXT, d8 TEXT,
+  old_value REAL,
+  new_value REAL,
+  source TEXT NOT NULL DEFAULT 'write',
+  user_id INTEGER,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_fact_audit_model ON fact_audit(model_id);
+CREATE INDEX IF NOT EXISTS ix_fact_audit_upload ON fact_audit(upload_id);
 `;
 
 sqlite.exec(DDL);

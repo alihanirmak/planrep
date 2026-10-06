@@ -1,5 +1,6 @@
 import { sqlite } from "./db";
-import { withDescendants, type DimInfo } from "./model";
+import type { DimInfo } from "./model";
+import { scopeMatchesCoord, scopesOverlap } from "./fact-filters";
 import type { Role } from "./session";
 
 export type WorkflowStatus =
@@ -264,22 +265,6 @@ export function applyTransition(
 
 // --- Veri kilidi: locked durumundaki workflow kapsamina yazma/silme koruma ---
 
-function scopeMatchesCoord(
-  scopeFilters: Record<string, string[]>,
-  dims: DimInfo[],
-  coordsByDimCode: Record<string, string | undefined>
-): boolean {
-  for (const [dimCode, codes] of Object.entries(scopeFilters)) {
-    if (!codes || codes.length === 0) continue; // kisit yok = bu boyutta her deger eslesir
-    const dim = dims.find((d) => d.code === dimCode);
-    if (!dim) continue;
-    const expanded = new Set(withDescendants(dim.members, codes));
-    const actual = coordsByDimCode[dimCode];
-    if (actual == null || !expanded.has(actual)) return false;
-  }
-  return true;
-}
-
 // Tek bir fact satirinin (coord) herhangi bir kilitli workflow kapsamina
 // girip girmedigini kontrol eder; girерse o workflow item'i dondurur.
 export function findBlockingLock(
@@ -304,22 +289,7 @@ export function findBlockingLockForFilters(
 ): WorkflowItem | null {
   const locks = listWorkflowItems({ modelId, status: "locked" });
   for (const item of locks) {
-    let overlaps = true;
-    for (const [dimCode, lockCodes] of Object.entries(item.scopeFilters)) {
-      if (!lockCodes || lockCodes.length === 0) continue;
-      const dim = dims.find((d) => d.code === dimCode);
-      if (!dim) continue;
-      const lockSet = new Set(withDescendants(dim.members, lockCodes));
-      const reqCodes = filters[dimCode];
-      if (!reqCodes || reqCodes.length === 0) continue; // filtre bu boyutu kisitlamiyor -> kesisim var sayilir
-      const reqSet = withDescendants(dim.members, reqCodes);
-      const hasOverlap = reqSet.some((c) => lockSet.has(c));
-      if (!hasOverlap) {
-        overlaps = false;
-        break;
-      }
-    }
-    if (overlaps) return item;
+    if (scopesOverlap(item.scopeFilters, filters, dims)) return item;
   }
   return null;
 }

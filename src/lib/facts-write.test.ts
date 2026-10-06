@@ -205,3 +205,123 @@ describe("upsertFacts + workflow kilidi", () => {
     expect(row?.value).toBe(42);
   });
 });
+
+describe("upsertFacts + is kurali (business rule)", () => {
+  const ruleDims: DimInfo[] = [
+    {
+      id: 20,
+      code: "RD1",
+      name: "RuleDim1",
+      type: "standard",
+      slot: 1,
+      members: [
+        { id: 1, code: "OPEX", name: "Opex", parentId: null, orderIdx: 0 },
+        { id: 2, code: "REVENUE", name: "Revenue", parentId: null, orderIdx: 1 },
+      ],
+    },
+    { id: 21, code: "RD2", name: "RuleDim2", type: "standard", slot: 2, members: [] },
+  ];
+  let ruleModelId: number;
+
+  beforeAll(async () => {
+    ruleModelId = Number(
+      sqlite
+        .prepare("INSERT INTO models (code, name, created_at) VALUES (?,?,?)")
+        .run("FWRULE", "Facts Write Rule Test", new Date().toISOString()).lastInsertRowid
+    );
+    const businessRules = await import("./business-rules");
+    businessRules.createBusinessRule({
+      modelId: ruleModelId,
+      name: "OPEX negatif olamaz",
+      scopeFilters: { RD1: ["OPEX"] },
+      op: "<",
+      value: 0,
+      severity: "block",
+      message: "OPEX negatif olamaz",
+    });
+    businessRules.createBusinessRule({
+      modelId: ruleModelId,
+      name: "Buyuk deger uyarisi",
+      scopeFilters: {},
+      op: ">",
+      value: 100000,
+      severity: "warn",
+    });
+  });
+
+  it("block kurali ihlal edilirse BusinessRuleError firlatir ve hicbir sey yazmaz", () => {
+    const uploadId = newUpload("rule-block.csv");
+    const before = (
+      sqlite.prepare("SELECT COUNT(*) c FROM facts WHERE model_id=?").get(ruleModelId) as { c: number }
+    ).c;
+    expect(() =>
+      upsertFacts(ruleModelId, ruleDims, [{ coords: ["OPEX", "X"], value: -50 }], uploadId, new Date().toISOString())
+    ).toThrowError(/opex negatif olamaz/i);
+    const after = (
+      sqlite.prepare("SELECT COUNT(*) c FROM facts WHERE model_id=?").get(ruleModelId) as { c: number }
+    ).c;
+    expect(after).toBe(before);
+  });
+
+  it("kural kapsami disindaki (REVENUE) negatif deger normal yazilir", () => {
+    const uploadId = newUpload("rule-free.csv");
+    upsertFacts(ruleModelId, ruleDims, [{ coords: ["REVENUE", "X"], value: -50 }], uploadId, new Date().toISOString());
+    const row = sqlite
+      .prepare("SELECT value FROM facts WHERE model_id=? AND d1=? AND d2=?")
+      .get(ruleModelId, "REVENUE", "X") as { value: number } | undefined;
+    expect(row?.value).toBe(-50);
+  });
+
+  it("warn kurali yazmayi engellemez ama warnings olarak doner", () => {
+    const uploadId = newUpload("rule-warn.csv");
+    const result = upsertFacts(
+      ruleModelId,
+      ruleDims,
+      [{ coords: ["REVENUE", "Y"], value: 500000 }],
+      uploadId,
+      new Date().toISOString()
+    );
+    expect(result.warnings).toHaveLength(1);
+    expect(result.warnings[0].rule.name).toBe("Buyuk deger uyarisi");
+    const row = sqlite
+      .prepare("SELECT value FROM facts WHERE model_id=? AND d1=? AND d2=?")
+      .get(ruleModelId, "REVENUE", "Y") as { value: number } | undefined;
+    expect(row?.value).toBe(500000);
+  });
+});
+
+describe("fact_audit — hucre bazli denetim izi", () => {
+  function auditRows(mId: number, d1: string, d2: string) {
+    return sqlite
+      .prepare("SELECT * FROM fact_audit WHERE model_id=? AND d1=? AND d2=? ORDER BY id ASC")
+      .all(mId, d1, d2) as Array<{ old_value: number | null; new_value: number | null; source: string; user_id: number | null }>;
+  }
+
+  it("ilk upsert old_value=null, new_value=deger kaydeder", () => {
+    const uploadId = newUpload("audit-1.csv");
+    upsertFacts(modelId, dims, [{ coords: ["AUD1", "X"], value: 10 }], uploadId, new Date().toISOString(), 42);
+    const rows = auditRows(modelId, "AUD1", "X");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ old_value: null, new_value: 10, source: "write", user_id: 42 });
+  });
+
+  it("ikinci upsert eski degeri old_value olarak kaydeder", () => {
+    const uploadId = newUpload("audit-2.csv");
+    upsertFacts(modelId, dims, [{ coords: ["AUD1", "X"], value: 20 }], uploadId, new Date().toISOString(), 43);
+    const rows = auditRows(modelId, "AUD1", "X");
+    expect(rows).toHaveLength(2);
+    expect(rows[1]).toMatchObject({ old_value: 10, new_value: 20, source: "write", user_id: 43 });
+  });
+
+  it("revert sirasinda 'revert' kaynakli bir audit kaydi olusur", () => {
+    const uploadId = newUpload("audit-revert.csv");
+    upsertFacts(modelId, dims, [{ coords: ["AUD2", "X"], value: 1 }], uploadId, new Date().toISOString(), 1);
+    const uploadB = newUpload("audit-revert-b.csv");
+    upsertFacts(modelId, dims, [{ coords: ["AUD2", "X"], value: 2 }], uploadB, new Date().toISOString(), 1);
+
+    revertUpload(uploadB, modelId, dims, 99);
+    const rows = auditRows(modelId, "AUD2", "X");
+    const revertRow = rows.find((r) => r.source === "revert");
+    expect(revertRow).toMatchObject({ old_value: 2, new_value: 1, source: "revert", user_id: 99 });
+  });
+});

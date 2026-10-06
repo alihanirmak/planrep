@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { sqlite } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +24,15 @@ export default function AuditPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-slate-800">Denetim Kaydı</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-slate-800">Denetim Kaydı</h1>
+        <Link
+          href="/admin/audit/cells"
+          className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+        >
+          🔍 Hücre Bazlı Denetim
+        </Link>
+      </div>
       <div className="mt-6 overflow-hidden rounded-xl bg-white shadow-sm">
         <table className="w-full text-left text-sm">
           <thead className="bg-slate-50 text-xs uppercase text-slate-500">

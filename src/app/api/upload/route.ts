@@ -6,6 +6,7 @@ import { getModelDims } from "@/lib/model";
 import { allowedSets } from "@/lib/access";
 import { upsertFacts } from "@/lib/facts-write";
 import { WorkflowLockError } from "@/lib/workflow";
+import { BusinessRuleError } from "@/lib/business-rules";
 import { logAudit } from "@/lib/audit";
 import { parseLocaleNumber } from "@/lib/number";
 
@@ -147,12 +148,17 @@ export async function POST(req: Request) {
       .run(modelId, file.name, session.id, parsed.length, now).lastInsertRowid
   );
 
+  let result;
   try {
-    upsertFacts(modelId, dims, parsed, uploadId, now);
+    result = upsertFacts(modelId, dims, parsed, uploadId, now, session.id);
   } catch (e) {
     if (e instanceof WorkflowLockError) {
       sqlite.prepare("UPDATE uploads SET status = 'failed' WHERE id = ?").run(uploadId);
       return NextResponse.json({ error: "workflow_locked", message: e.message }, { status: 423 });
+    }
+    if (e instanceof BusinessRuleError) {
+      sqlite.prepare("UPDATE uploads SET status = 'failed' WHERE id = ?").run(uploadId);
+      return NextResponse.json({ error: "business_rule_violated", message: e.message }, { status: 400 });
     }
     throw e;
   }
@@ -162,5 +168,10 @@ export async function POST(req: Request) {
     filename: file.name,
     rows: parsed.length,
   });
-  return NextResponse.json({ ok: true, uploadId, inserted: parsed.length });
+  return NextResponse.json({
+    ok: true,
+    uploadId,
+    inserted: parsed.length,
+    warnings: result.warnings.map((w) => w.rule.message || `"${w.rule.name}" kuralı ihlal edildi`),
+  });
 }

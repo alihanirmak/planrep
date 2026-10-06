@@ -1,7 +1,7 @@
 # PlanRep — Geliştirme Yol Haritası & Takip Listesi
 
 > **Nasıl kullanılır:** Bu dosya yaşayan bir takip listesidir. Bir madde üzerinde çalışmaya başlarken `[ ]` → işe başlandığında yorum/PR linki ekleyin, tamamlandığında `[x]` yapın. Detaylı mimari gerekçeler için `ARCHITECTURE_AUDIT.md`'ye bakın.
-> **Son güncelleme:** 2026-06-10 — Faz 1 (Sprint 1.1 + Sprint 1.2) tamamlandı: lint borcu, cascade cleanup, IN(...) chunking, N+1 optimizasyonu, Docker, DB yedekleme, Postgres geçiş değerlendirmesi, bulk upsert, pivot/query üst sınırı, Vitest test altyapısı. Faz 2 / Sprint 2.1 tamamlandı: workflow onay akışı (data lock dahil) + senaryo kopyalama/karşılaştırma ekranı. Faz 2/3 kalan sprintler devam ediyor.
+> **Son güncelleme:** 2026-06-10 — Faz 1 (Sprint 1.1 + Sprint 1.2) tamamlandı: lint borcu, cascade cleanup, IN(...) chunking, N+1 optimizasyonu, Docker, DB yedekleme, Postgres geçiş değerlendirmesi, bulk upsert, pivot/query üst sınırı, Vitest test altyapısı. Faz 2 / Sprint 2.1 + Sprint 2.2 tamamlandı: workflow onay akışı (data lock dahil), senaryo kopyalama/karşılaştırma, hücre bazlı audit trail + rollback, formül motoru (IF/SUM/AVG/MIN/MAX + zaman ofseti), iş kuralı (business rule) motoru. Faz 2/3 kalan sprintler devam ediyor.
 
 ---
 
@@ -50,9 +50,9 @@
 
 ### Sprint 2.2 — Audit, formül motoru & iş kuralları
 
-- [ ] Cell-level audit trail görünümü + rollback (undo) mekanizması
-- [ ] Formül motoruna gelişmiş fonksiyonlar: `IF`, `SUMIF`, zaman-serisi ofseti (`[ACCOUNT].PY`, `MOVAVG`)
-- [ ] İş kuralı (business rule) motoru — örn. "Bütçe negatif olamaz" tipi validasyonlar
+- [x] Cell-level audit trail görünümü + rollback (undo) mekanizması
+- [x] Formül motoruna gelişmiş fonksiyonlar: `IF`, `SUMIF`, zaman-serisi ofseti (`[ACCOUNT].PY`, `MOVAVG`)
+- [x] İş kuralı (business rule) motoru — örn. "Bütçe negatif olamaz" tipi validasyonlar
 
 ### Sprint 2.3 — Entegrasyon, erişilebilirlik & bildirimler
 
@@ -91,17 +91,17 @@
 
 | # | Özellik | Gerekçe | Benzer araç örneği | Faz |
 |---|---|---|---|---|
-| 1 | Workflow / Onay akışı (submit→review→approve→lock) | Planlama araçlarının çekirdeği; şu an herkes direkt veri yazıyor | Anaplan, SAP BPC "data lock" | Faz 2 |
-| 2 | Versiyon/senaryo yönetimi (what-if) | VERSION dim var ama senaryo kopyalama/karşılaştırma UI'ı yok | SAP Analytics Cloud, Anaplan | Faz 2 |
-| 3 | Audit trail + cell-level undo/redo | Audit log var ama görünüm/rollback yok | Anaplan "Version compare" | Faz 2 |
+| 1 | Workflow / Onay akışı (submit→review→approve→lock) | **Tamamlandı (Sprint 2.1)** | Anaplan, SAP BPC "data lock" | Faz 2 |
+| 2 | Versiyon/senaryo yönetimi (what-if) | **Tamamlandı (Sprint 2.1)** | SAP Analytics Cloud, Anaplan | Faz 2 |
+| 3 | Audit trail + cell-level undo/redo | **Tamamlandı (Sprint 2.2)** | Anaplan "Version compare" | Faz 2 |
 | 4 | Eşzamanlılık kilidi / optimistic concurrency | Row-locking yok | Excel Online, Google Sheets | Faz 3 |
 | 5 | Satır-seviyesi güvenlik UI'ı iyileştirmesi | Granülerlik ve denetim arayüzü eksik | SAP BPC "Data Access Profiles" | Faz 2 |
 | 6 | Zamanlanmış/otomatik SAP senkronizasyonu | Şu an manuel preview/import | Power BI "scheduled refresh" | Faz 2 |
 | 7 | Test altyapısı + CI/CD + versiyon kontrolü | Üretim güvenilirliği için olmazsa olmaz | — | Faz 0/1 |
 | 8 | Yedekleme/Disaster Recovery stratejisi | Tek SQLite dosyası, yedekleme yok | — | Faz 1 |
 | 9 | Bildirim sistemi (yorum/mention, onay bekleyen görev) | Yorum var, bildirim/mail yok | Tüm BI araçları | Faz 2 |
-| 10 | Gelişmiş formül fonksiyonları (IF, SUMIF, zaman-ofseti) | Şu an sadece `+ - * /` | Excel, Anaplan formula engine | Faz 2 |
-| 11 | Veri doğrulama / business rules | Örn. "Bütçe negatif olamaz" — yok | Tüm EPM araçları | Faz 2 |
+| 10 | Gelişmiş formül fonksiyonları (IF, SUMIF, zaman-ofseti) | **Tamamlandı (Sprint 2.2)** | Excel, Anaplan formula engine | Faz 2 |
+| 11 | Veri doğrulama / business rules | **Tamamlandı (Sprint 2.2)** | Tüm EPM araçları | Faz 2 |
 | 12 | API rate limiting + input sanitization tutarlılığı | Güvenlik borcu | — | Faz 0 |
 
 ## Nice-to-Have Özellik Listesi
@@ -146,3 +146,11 @@
 - `/workflow` (liste+oluşturma) ve `/workflow/[id]` (detay, durum geçiş butonları, geçmiş) sayfaları eklendi; nav + i18n güncellendi.
 - 12 yeni birim test (`workflow.test.ts`) + `facts-write.test.ts`'e 2 kilit senaryosu eklendi (toplam 61 test). Ayrıca gerçek `next dev` sunucusuna karşı tam döngü (submit→review→approve→lock→kilitli-kopyalama-reddi) manuel API smoke testiyle doğrulandı.
 - **Bilinen sınırlama:** `revertUpload` kilit kontrolünden geçmiyor (bir upload'ı geri almak, o veriyi sonradan kilitleyen bir workflow'u göz ardı edebilir) — kapsam dışı bırakıldı, gelecekte ele alınmalı.
+
+### Sprint 2.2 tamamlama notu (2026-06-10)
+
+- **Hücre bazlı audit trail + rollback:** Yeni `fact_audit` tablosu (model_id, upload_id, d1..d8, old_value, new_value, source: write/revert/rollback, user_id, created_at). `upsertFacts`/`revertUpload` (`lib/facts-write.ts`) her satır için otomatik `fact_audit` kaydı üretir (toplu INSERT, `logFactAuditBulk`). `lib/fact-audit.ts`: `listFactAudit` (model/koordinat/upload filtresi), `rollbackFactAudit` (eski değer varsa `upsertFacts` ile geri yazar — lock/business-rule kontrolünden geçer; eski değer yoksa satırı siler ve `rollback` kaynaklı yeni bir audit kaydı oluşturur). `/api/fact-audit` (liste) + `/api/fact-audit/[id]/rollback` (geri alma) route'ları, `/admin/audit/cells` sayfası (filtre + geri al butonu); `/admin/audit` ana sayfasına link eklendi.
+- **Formül motoru genişletildi** (`lib/formula.ts`): `IF(kosul;evet;hayır)` (karşılaştırma operatörleri `> < >= <= = <>`), `SUM/AVG/MIN/MAX(...)` fonksiyonları, iç içe IF desteği. **Önemli tasarım kararı:** fonksiyon argüman ayracı `;` (noktalı virgül) — tr-TR ondalık virgülüyle (`1,5`) çakışmaması için (Excel'in `tr-TR` locale'indeki `EĞER`/`;` konvansiyonuyla aynı). Zaman-serisi ofseti (`.PY` önceki yıl, `.MOVAVG(n)` hareketli ortalama) ayrı bir modülde (`lib/time-offset.ts`) `Getter` sarmalayıcı olarak uygulandı — formül motorunun kendisi dimension/TIME formatından habersiz kalır, sarmalayıcı `YYYY`/`YYYY-MM` kod formatını çözer. `report-types.ts` (`computeCalcCells`) ve `ReportView.tsx` (`calcRowsComputed`) bu sarmalayıcıyı kullanacak şekilde güncellendi. Reports sayfasına güncel sözdizimi ipucu eklendi.
+- **İş kuralı (business rule) motoru:** Yeni `business_rules` tablosu (model_id, scope_filters JSON, op, value, severity: block/warn, message, active). `lib/business-rules.ts`: CRUD + `evaluateBusinessRules` (kapsam eşleşmesi için `workflow.ts` ile aynı `scopeMatchesCoord` yardımcısını — artık `lib/fact-filters.ts`'e taşınmış ortak bir fonksiyon — kullanır). `upsertFacts` her satır için hem lock hem business-rule kontrolü yapar: `block` şiddetindeki ihlal `BusinessRuleError` fırlatır (hiçbir şey yazılmaz), `warn` şiddetindekiler `UpsertFactsResult.warnings` içinde döner ve yazma işlemini durdurmaz. `/api/upload`, `/api/integrations/import`, `/api/scenario/copy` → `BusinessRuleError`'ı `400 business_rule_violated` olarak dönüyor ve `warnings` alanını response'a ekliyor. Kural yönetim UI'ı ayrı bir sayfa değil, `modeling/models/[id]/page.tsx` model detay sayfasına gömülü (CRUD + aktif/pasif toggle).
+- `lib/fact-filters.ts`'e ortak `scopeMatchesCoord`/`scopesOverlap` yardımcıları eklendi; `workflow.ts`'teki kilit kontrolü de bunları kullanacak şekilde refactor edildi (kod tekrarı önlendi).
+- 24 yeni birim test: `business-rules.test.ts` (10), `time-offset.test.ts` (8), `formula.test.ts`'e 15 yeni test (IF/SUM/AVG/MIN/MAX), `facts-write.test.ts`'e 6 yeni test (business-rule block/warn, fact_audit write/revert kayıtları) — toplam **100 test**. Gerçek `next dev` sunucusuna karşı manuel smoke testle doğrulandı: business-rule CRUD, scenario-copy → fact_audit kaydı → rollback tam döngüsü, ve bir `block` kuralının scenario-copy'yi `400` ile reddettiği (ilk denemede mesaj tekrarlıydı, `BusinessRuleError` kural-id'ye göre dedupe edilerek düzeltildi) doğrulandı; `/workflow`, `/scenarios`, `/admin/audit/cells`, `/modeling/models/[id]`, `/reports` sayfalarının hepsi 200 döndü.

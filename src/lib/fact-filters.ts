@@ -91,3 +91,46 @@ export function sumGroupedRows(
   }
   return [...map.values()];
 }
+
+// Bir "kapsam" (scope_filters — workflow kilitleri ve is kurallarinin ortak
+// temsili: Record<dimCode, string[]>) tek bir koordinat kumesiyle eslesip
+// eslesmedigini kontrol eder. Kisit tanimlanmayan (bos liste/yok) boyutlar
+// wildcard sayilir (her deger eslesir); tanimli boyutlar hiyerarsi-farkinda
+// (withDescendants) genisletilerek kontrol edilir.
+export function scopeMatchesCoord(
+  scopeFilters: Record<string, string[]>,
+  dims: DimInfo[],
+  coordsByDimCode: Record<string, string | undefined>
+): boolean {
+  for (const [dimCode, codes] of Object.entries(scopeFilters)) {
+    if (!codes || codes.length === 0) continue;
+    const dim = dims.find((d) => d.code === dimCode);
+    if (!dim) continue;
+    const expanded = new Set(withDescendants(dim.members, codes));
+    const actual = coordsByDimCode[dimCode];
+    if (actual == null || !expanded.has(actual)) return false;
+  }
+  return true;
+}
+
+// Iki kapsamin (orn. bir kilidin scope_filters'i ile toplu bir islemin
+// filtresi) KESISIP KESISMEDIGINI kontrol eder — konservatif: herhangi bir
+// boyutta kesisim yoksa false, tum boyutlarda kesisim varsa (veya kisit yoksa) true.
+export function scopesOverlap(
+  scopeA: Record<string, string[]>,
+  scopeB: Record<string, string[]>,
+  dims: DimInfo[]
+): boolean {
+  for (const [dimCode, codesA] of Object.entries(scopeA)) {
+    if (!codesA || codesA.length === 0) continue;
+    const dim = dims.find((d) => d.code === dimCode);
+    if (!dim) continue;
+    const setA = new Set(withDescendants(dim.members, codesA));
+    const codesB = scopeB[dimCode];
+    if (!codesB || codesB.length === 0) continue; // B bu boyutu kisitlamiyor -> kesisim var sayilir
+    const setB = withDescendants(dim.members, codesB);
+    const hasOverlap = setB.some((c) => setA.has(c));
+    if (!hasOverlap) return false;
+  }
+  return true;
+}

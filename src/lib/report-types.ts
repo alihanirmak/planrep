@@ -1,5 +1,6 @@
 // Rapor tanimi ve paylasillan tipler — hem istemci hem sunucu (saf TS)
 import { compileFormula } from "./formula";
+import { withTimeOffsets } from "./time-offset";
 
 export type CalcColumn = { id: string; name: string; formula: string };
 export type CalcRow = { id: string; name: string; formula: string };
@@ -97,8 +98,8 @@ export function computeCalcCells(
   for (const cc of calcColumns) {
     try {
       const compiled = compileFormula(cc.formula);
-      out[cc.id] = compiled.run((ref) =>
-        ref === "TOPLAM" || ref === "TOTAL" ? row.total : row.cells[ref]
+      out[cc.id] = compiled.run(
+        withTimeOffsets((ref) => (ref === "TOPLAM" || ref === "TOTAL" ? row.total : row.cells[ref]))
       );
     } catch {
       out[cc.id] = undefined;

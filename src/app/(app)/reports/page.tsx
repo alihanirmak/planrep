@@ -998,6 +998,11 @@ export default function ReportsPage() {
                   Anahtarlar: {[...view.columns.map((c) => c.key), "TOPLAM"].map((c) => `[${c}]`).join(" ")}
                 </div>
               )}
+              <div className="mt-1 text-[10px] text-slate-400">
+                Fonksiyonlar: IF(kosul;evet;hayır), SUM(...), AVG(...), MIN(...), MAX(...) — argümanlar{" "}
+                <code>;</code> ile ayrılır. Zaman ofseti: <code>[2026-03.PY]</code> (önceki yıl),{" "}
+                <code>[2026-03.MOVAVG(3)]</code> (hareketli ortalama).
+              </div>
             </Section>
 
             <Section title="ƒ Hesaplanan Satırlar" badge={calcRows.length}>

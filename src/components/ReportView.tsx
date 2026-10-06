@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPivotEngine, type PivotDim, type PivotEngine, type PivotViewRow } from "@/lib/pivot";
 import { migrateDef, type ReportDefV2 } from "@/lib/report-types";
 import { compileFormula } from "@/lib/formula";
+import { withTimeOffsets } from "@/lib/time-offset";
 import PivotGrid from "@/components/PivotGrid";
 
 type Dim = PivotDim & { id: number };
@@ -97,10 +98,10 @@ export default function ReportView({
       try {
         const compiled = compileFormula(cr.formula);
         for (const col of view.columns) {
-          const v = compiled.run((ref) => engine.cellsForMember(ref).cells[col.key]);
+          const v = compiled.run(withTimeOffsets((ref) => engine.cellsForMember(ref).cells[col.key]));
           if (v != null) cells[col.key] = v;
         }
-        total = compiled.run((ref) => engine.cellsForMember(ref).total) ?? 0;
+        total = compiled.run(withTimeOffsets((ref) => engine.cellsForMember(ref).total)) ?? 0;
       } catch {
         /* hatali formul */
       }
