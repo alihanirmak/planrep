@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { getT, LOCALE_COOKIE, type Locale, type TKey } from "@/lib/i18n";
 import type { SessionUser } from "@/lib/session";
+import NotificationBell from "./NotificationBell";
 
 const NAV: Array<{ href: string; key: TKey; icon: string; adminOnly?: boolean }> = [
   { href: "/", key: "nav.home", icon: "🏠" },
@@ -74,9 +75,12 @@ export default function Sidebar({
         })}
       </nav>
       <div className="border-t border-slate-800 px-5 py-4 text-sm">
-        <div className="mb-2">
-          <div className="font-medium text-white">{user.name}</div>
-          <div className="text-xs text-slate-400">{t(`role.${user.role}` as TKey)}</div>
+        <div className="mb-2 flex items-center justify-between">
+          <div>
+            <div className="font-medium text-white">{user.name}</div>
+            <div className="text-xs text-slate-400">{t(`role.${user.role}` as TKey)}</div>
+          </div>
+          <NotificationBell locale={locale} />
         </div>
         <div className="flex items-center justify-between">
           <div className="flex gap-1 text-xs">

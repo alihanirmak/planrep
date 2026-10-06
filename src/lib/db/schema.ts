@@ -243,3 +243,25 @@ export const connectorConfigs = sqliteTable("connector_configs", {
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
 });
+
+// In-app bildirim sistemi. "type" bir i18n anahtarina karsilik gelir
+// (lib/i18n.ts "notif.*"), "params" o anahtardaki {placeholder}'lari
+// doldurmak icin JSON Record<string,string>; boylece bildirim metni
+// OLUSTURULDUGU anda degil, GOSTERILDIGI anda (alicinin kendi locale'ine
+// gore) cevrilir. "link" tiklandiginda gidilecek sayfa (opsiyonel).
+export const notifications = sqliteTable(
+  "notifications",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: integer("user_id").notNull(),
+    type: text("type").notNull(),
+    params: text("params").notNull().default("{}"),
+    link: text("link"),
+    isRead: integer("is_read").notNull().default(0),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [
+    index("ix_notifications_user").on(t.userId),
+    index("ix_notifications_user_unread").on(t.userId, t.isRead),
+  ]
+);

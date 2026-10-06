@@ -119,6 +119,14 @@ const tr = {
   "err.axetNoJson": "axet yanıtında JSON bulunamadı",
   "err.axetNotFound": "axet-code bulunamadı",
   "err.aiUnresolved": "Soru çözümlenemedi — daha açık ifade etmeyi dene",
+  "nav.notifications": "Bildirimler",
+  "notif.empty": "Henüz bildirim yok",
+  "notif.markAllRead": "Tümünü okundu yap",
+  "notif.comment_new": "{userName}, \"{entityName}\" üzerine yorum yaptı",
+  "notif.comment_mention": "{userName} sizi \"{entityName}\" üzerindeki bir yorumda etiketledi",
+  "notif.workflow_review_needed": "\"{workflowName}\" iş akışı onayınızı bekliyor",
+  "notif.workflow_approved": "\"{workflowName}\" iş akışı onaylandı",
+  "notif.workflow_rejected": "\"{workflowName}\" iş akışı reddedildi",
 } as const;
 
 const en: Record<keyof typeof tr, string> = {
@@ -238,6 +246,14 @@ const en: Record<keyof typeof tr, string> = {
   "err.axetNoJson": "No JSON found in axet response",
   "err.axetNotFound": "axet-code not found",
   "err.aiUnresolved": "Could not resolve the question — try rephrasing it more explicitly",
+  "nav.notifications": "Notifications",
+  "notif.empty": "No notifications yet",
+  "notif.markAllRead": "Mark all as read",
+  "notif.comment_new": "{userName} commented on \"{entityName}\"",
+  "notif.comment_mention": "{userName} mentioned you in a comment on \"{entityName}\"",
+  "notif.workflow_review_needed": "Workflow \"{workflowName}\" needs your approval",
+  "notif.workflow_approved": "Workflow \"{workflowName}\" was approved",
+  "notif.workflow_rejected": "Workflow \"{workflowName}\" was rejected",
 };
 
 export type TKey = keyof typeof tr;

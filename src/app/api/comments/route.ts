@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { sqlite } from "@/lib/db";
 import { canAccessCommentEntity } from "@/lib/access";
+import { createNotifications, resolveMentionedUserIds } from "@/lib/notifications";
 
 export async function GET(req: Request) {
   const session = await getSession();
@@ -66,5 +67,48 @@ export async function POST(req: Request) {
       .run(entityType, entityId, cellKey ?? null, session.id, text, new Date().toISOString())
       .lastInsertRowid
   );
+
+  notifyCommentRecipients(session.id, entityType, entityId, text);
+
   return NextResponse.json({ id }, { status: 201 });
+}
+
+// Yorum sahibi (report/dashboard owner_id) ve metinde @mention edilen
+// kullanicilara bildirim olusturur (yazan haric). Mention edilen bir
+// kullanici ayni zamanda owner ise mention bildirimi tercih edilir
+// (daha spesifik). "cell" turunde sahiplik modeli olmadigi icin sadece
+// mention bildirimi gonderilir.
+function notifyCommentRecipients(
+  authorId: number,
+  entityType: "report" | "dashboard" | "cell",
+  entityId: string,
+  text: string
+) {
+  const mentionedIds = resolveMentionedUserIds(text).filter((id) => id !== authorId);
+  const link = entityType === "report" ? "/reports" : entityType === "dashboard" ? "/dashboards" : null;
+
+  let entityName = entityId;
+  let ownerId: number | null = null;
+  if (entityType === "report" || entityType === "dashboard") {
+    const table = entityType === "report" ? "reports" : "dashboards";
+    const row = sqlite
+      .prepare(`SELECT name, owner_id AS ownerId FROM ${table} WHERE id = ?`)
+      .get(Number(entityId)) as { name: string; ownerId: number } | undefined;
+    if (row) {
+      entityName = row.name;
+      ownerId = row.ownerId;
+    }
+  }
+
+  const author = sqlite.prepare("SELECT name FROM users WHERE id = ?").get(authorId) as
+    | { name: string }
+    | undefined;
+  const params = { userName: author?.name ?? "?", entityName };
+
+  if (mentionedIds.length > 0) {
+    createNotifications(mentionedIds, "comment_mention", params, link);
+  }
+  if (ownerId != null && ownerId !== authorId && !mentionedIds.includes(ownerId)) {
+    createNotifications([ownerId], "comment_new", params, link);
+  }
 }

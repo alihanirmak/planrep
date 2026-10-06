@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   createPivotEngine,
   PIVOT_SEP,
@@ -217,6 +218,7 @@ function IconBtn({
 
 export default function ReportsPage() {
   const t = getT(readLocaleClient());
+  const searchParams = useSearchParams();
   const [models, setModels] = useState<Model[]>([]);
   const [saved, setSaved] = useState<SavedReport[]>([]);
   const [currentId, setCurrentId] = useState<number | null>(null);
@@ -270,6 +272,12 @@ export default function ReportsPage() {
       .then((r) => r.json())
       .then((list: Model[]) => {
         setModels(list);
+        // Bildirimden/derin baglantidan gelen rapor id'si varsa onu ac
+        const linkedId = searchParams.get("id");
+        if (linkedId) {
+          loadReport(Number(linkedId));
+          return;
+        }
         // AI Sorgu sayfasindan gelen tanim varsa uygula ve calistir
         const aiRaw = typeof window !== "undefined" ? sessionStorage.getItem("planrep_ai_def") : null;
         if (aiRaw) {
@@ -290,6 +298,7 @@ export default function ReportsPage() {
         if (list.length > 0) applyModelDefaults(list[0]);
       });
     loadSavedList();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function applyModelDefaults(m: Model) {

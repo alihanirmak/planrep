@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSession } from "@/lib/auth";
-import { getWorkflowItem, canTransition, applyTransition } from "@/lib/workflow";
+import { getWorkflowItem, canTransition, applyTransition, type WorkflowItem } from "@/lib/workflow";
 import { logAudit } from "@/lib/audit";
+import { createNotifications } from "@/lib/notifications";
 
 const schema = z.object({
   action: z.enum(["submit", "review", "approve", "reject", "lock", "reopen"]),
@@ -33,5 +34,25 @@ export async function POST(
 
   const updated = applyTransition(item, check.rule, session.id, comment);
   logAudit(session.id, `workflow.${action}`, "workflow", id, { comment, from: item.status, to: updated.status });
+  notifyTransitionRecipients(updated, action, session.id);
   return NextResponse.json(updated);
+}
+
+// Onaylama akisinda ilgili taraflara bildirim gonderir: submit -> atanmis
+// onaylayana (varsa), approve/reject -> is akisi sahibine (kendi islemiyse
+// bildirim gondermez).
+function notifyTransitionRecipients(
+  item: WorkflowItem,
+  action: z.infer<typeof schema>["action"],
+  actorId: number
+) {
+  const link = `/workflow/${item.id}`;
+  const params = { workflowName: item.name };
+  if (action === "submit" && item.approverId != null && item.approverId !== actorId) {
+    createNotifications([item.approverId], "workflow_review_needed", params, link);
+  } else if (action === "approve" && item.ownerId !== actorId) {
+    createNotifications([item.ownerId], "workflow_approved", params, link);
+  } else if (action === "reject" && item.ownerId !== actorId) {
+    createNotifications([item.ownerId], "workflow_rejected", params, link);
+  }
 }

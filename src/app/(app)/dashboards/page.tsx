@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import DashboardWidget, { type Widget, type WidgetType } from "@/components/DashboardWidget";
 import MemberPicker from "@/components/MemberPicker";
 import { migrateDef } from "@/lib/report-types";
@@ -23,6 +24,7 @@ const WIDGET_TYPES: Array<[WidgetType, string]> = [
 
 export default function DashboardsPage() {
   const t = getT(readLocaleClient());
+  const searchParams = useSearchParams();
   const [models, setModels] = useState<Model[]>([]);
   const [reports, setReports] = useState<SavedReport[]>([]);
   const [saved, setSaved] = useState<SavedDashboard[]>([]);
@@ -76,6 +78,10 @@ export default function DashboardsPage() {
       });
     fetch("/api/reports").then((r) => r.json()).then(setReports);
     loadList();
+    // Bildirimden/derin baglantidan gelen dashboard id'si varsa onu ac
+    const linkedId = searchParams.get("id");
+    if (linkedId) loadDashboard(Number(linkedId));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function newDashboard() {
