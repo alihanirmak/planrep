@@ -63,6 +63,16 @@
   - **Henüz commit edilmedi** — kullanıcı onayı bekleniyor.
 - Sprint 3.1'in TÜMÜ (2FA + SSO + çoklu-tenant) artık tamamlandı.
   Sıradaki: Sprint 3.2 madde 1 (virtualized grid) için onay istenecek.
+- Çoklu-tenant commit edildi ve push edildi (`51c9622`, origin/main güncel).
+- Sprint 3.2 madde 1 (virtualized grid) bu oturumda implemente edildi:
+  `lib/virtualize.ts` (`computeVirtualRange` — saf, DOM'suz sanallaştırma
+  matematiği, 9 test) + `PivotGrid.tsx` entegrasyonu (80 satır eşiği,
+  callback-ref ile satır yüksekliği ölçümü, sticky header/footer). Bu
+  sırada React Compiler'ın "ref'e render sırasında erişilemez" kuralı
+  ihlali bulunup düzeltildi (useRef+useLayoutEffect yerine callback-ref).
+  Toplam **228 test**. Lint/typecheck/build temiz. **Henüz commit
+  edilmedi** — kullanıcı onayı bekleniyor, sonra Sprint 3.2 madde 2
+  (Redis caching) için onay istenecek.
 
 ---
 
