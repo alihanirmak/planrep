@@ -85,3 +85,26 @@ export function restrictCodes(
   if (!requested || requested.length === 0) return [...allowed];
   return requested.filter((c) => allowed.has(c));
 }
+
+export type TenantAccessEntry = { userId: number; dimensionId: number; memberCodes: string[] };
+
+// Tenant'in TUM kullanicilarinin erisim kayitlarini tek sorguda doner — bir
+// kullanici x boyut matrisi (denetim/audit ekrani) olusturmak icin kullanilir.
+// Tenant filtresi `users` tablosu uzerinden dolayli uygulanir (user_dim_access
+// tablosunun kendi tenant_id'si yok — bkz. "dogrudan + transitive izolasyon"
+// mimari kararina (ROADMAP.md) uygun).
+export function getTenantAccessEntries(tenantId: number): TenantAccessEntry[] {
+  const rows = sqlite
+    .prepare(
+      `SELECT uda.user_id AS userId, uda.dimension_id AS dimensionId, uda.member_codes AS memberCodes
+       FROM user_dim_access uda
+       JOIN users u ON u.id = uda.user_id
+       WHERE u.tenant_id = ?`
+    )
+    .all(tenantId) as Array<{ userId: number; dimensionId: number; memberCodes: string }>;
+  return rows.map((r) => ({
+    userId: r.userId,
+    dimensionId: r.dimensionId,
+    memberCodes: JSON.parse(r.memberCodes) as string[],
+  }));
+}

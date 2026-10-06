@@ -125,7 +125,7 @@ Sprint 3.1/3.2/3.3'ün diğer tüm maddeleri tamamlandı — **Faz 3 bu haliyle 
 | 2 | Versiyon/senaryo yönetimi (what-if) | **Tamamlandı (Sprint 2.1)** | SAP Analytics Cloud, Anaplan | Faz 2 |
 | 3 | Audit trail + cell-level undo/redo | **Tamamlandı (Sprint 2.2)** | Anaplan "Version compare" | Faz 2 |
 | 4 | Eşzamanlılık kilidi / optimistic concurrency | **Tamamlandı (Sprint 3.2)** — version kolonu + 409 Conflict | Excel Online, Google Sheets | Faz 3 |
-| 5 | Satır-seviyesi güvenlik UI'ı iyileştirmesi | Granülerlik ve denetim arayüzü eksik (hâlâ Users sayfasına gömülü, ayrı sayfa yok) | SAP BPC "Data Access Profiles" | Faz 2 |
+| 5 | Satır-seviyesi güvenlik UI'ı iyileştirmesi | **Tamamlandı (2026-06-10)** — `/admin/access` denetim matrisi | SAP BPC "Data Access Profiles" | Faz 2 |
 | 6 | Zamanlanmış/otomatik SAP senkronizasyonu | **Tamamlandı (Sprint 2.3 devam)** — webhook (`/api/cron/sync`) tabanlı, harici cron tetikler | Power BI "scheduled refresh" | Faz 2 |
 | 7 | Test altyapısı + CI/CD + versiyon kontrolü | **Tamamlandı** — `.github/workflows/ci.yml`, 275 test, git | — | Faz 0/1 |
 | 8 | Yedekleme/Disaster Recovery stratejisi | **Tamamlandı (kısmen)** — `scripts/backup-db.js` (`db:backup`) + docker-compose `backup` servisi; otomatik zamanlama/off-site kopya yok | — | Faz 1 |
@@ -175,6 +175,14 @@ Sprint 3.1/3.2/3.3'ün diğer tüm maddeleri tamamlandı — **Faz 3 bu haliyle 
 - **Diğer küçük tutarlılık düzeltmeleri:** `/api/notifications` POST'taki elle yapılan `body?.action !== "markAllRead"` kontrolü `zod` (`z.literal`) ile değiştirildi; `lib/notifications.ts`'teki `listNotifications` limit parametresi artık `Number.isFinite` ile korunuyor (önceden geçersiz/NaN bir `limit` query param'ı aynı şekilde yakalanmamış SQL hatası riski taşıyordu).
 - **Kapsam dışı bırakılanlar (gerekçeli):** `/api/upload` (multipart `FormData` + `File` alır) zaten kapsamlı elle doğrulama içeriyor — zod `FormData`/`File` için doğal bir uyum sağlamıyor, dokunulmadı. Export route'ları (`/api/export/excel`, `/api/export/pptx`) ve diğer ~30 route zaten `zod`/`exportPayloadSchema` ile doğrulanıyordu, bu çalışmanın kapsamına girmedi.
 - 11 yeni test: `route-params.test.ts` (4 — geçerli/negatif/sayı-olmayan/NaN-Infinity dizgeleri) + `rate-limit.test.ts` (7 — token-bucket, bağımsız anahtarlar, pencere sıfırlama, `clientIp` başlık öncelik sırası) — toplam **286 test**. Lint/typecheck/build hepsi temiz.
+
+### Faz 2 — Madde 5 tamamlama notu: satır-seviyesi güvenlik admin UI (2026-06-10)
+
+- **Önce tespit edilen durum:** veri erişim yetkisi (`user_dim_access`) sadece `/admin/users` sayfasına gömülü, kullanıcı-başına-tıkla aç/düzenle modeliyle yönetiliyordu — bir yöneticinin "hangi kullanıcılar hangi boyutlarda kısıtlı" sorusunu cevaplamak için her kullanıcıyı tek tek açması gerekiyordu; denetim/audit amaçlı bir genel bakış yoktu.
+- **Mimari karar — yeni salt-okunur bulk uç + mevcut per-user PUT'un yeniden kullanımı:** `setUserAccess` zaten bir kullanıcının TÜM erişim kayıtlarını tam değiştirme (full-replace) semantiğiyle çalışıyor; bu davranış korunarak yeni `/api/access` (GET, admin-only) ucu eklendi — `lib/access.ts`'teki yeni `getTenantAccessEntries(tenantId)` ile tenant'ın TÜM kullanıcı×boyut erişim kayıtlarını tek sorguda döner (tenant filtresi `users` tablosu üzerinden transitive — `user_dim_access`'in kendi `tenant_id`'si yok, mevcut mimari karara uygun). Düzenleme hâlâ mevcut `/api/users/[id]/access` PUT'u üzerinden yapılır, yeni bir yazma ucu eklenmedi.
+- **Kod tekrarının giderilmesi:** `admin/users/page.tsx`'teki satır-içi erişim düzenleme paneli `components/DataAccessEditor.tsx`'e çıkarıldı (reusable component) — hem eski sayfa hem yeni sayfa aynı bileşeni kullanıyor, davranış değişmedi.
+- **Yeni `/admin/access` sayfası (asıl özellik):** kullanıcı × boyut matrisi — her hücre "Tüm" (kısıtsız) veya "N üye" (kısıtlı) rozeti gösterir, tıklanınca o kullanıcı için `DataAccessEditor` paneli açılır (TÜM boyutları birden gösterir, kaydet full-replace ile çalışır). Arama kutusu (ad/e-posta) + "sadece kısıtlı kullanıcılar" filtresi eklendi — büyük kullanıcı listelerinde denetim/triage için. `admin/users/page.tsx`'e bu sayfaya giden bir üst-bar linki eklendi. Nav (`Sidebar.tsx`) + i18n (`access.*`, `nav.access`) güncellendi.
+- 2 yeni test (`access.test.ts` → `getTenantAccessEntries`: tenant izolasyonu + boş tenant) — toplam **288 test**. Gerçek `next dev` sunucusuna karşı manuel smoke test: login → `/api/access` (boş) → `/api/users/2/access` PUT ile kısıtlama ekle → `/api/access`'te anında göründüğü doğrulandı → `/admin/access` sayfası 200 render etti → test verisi geri alındı. Lint/typecheck/build hepsi temiz.
 
 ### Sprint 2.1 tamamlama notu (2026-06-10)
 

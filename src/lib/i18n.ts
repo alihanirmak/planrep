@@ -14,6 +14,7 @@ const tr = {
   "nav.integrations": "Entegrasyonlar",
   "nav.ai": "AI Sorgu",
   "nav.users": "Kullanıcılar",
+  "nav.access": "Veri Yetkileri",
   "nav.audit": "Denetim Kaydı",
   "nav.workflow": "Onay Akışı",
   "nav.scenarios": "Senaryolar",
@@ -187,6 +188,16 @@ const tr = {
   "apiKeys.lastUsed": "Son kullanım: {date}",
   "apiKeys.neverUsed": "Henüz kullanılmadı",
   "apiKeys.confirmRevoke": "Bu anahtar iptal edilsin mi? Bu anahtarı kullanan tüm entegrasyonlar erişimi kaybeder.",
+  "access.title": "Veri Yetkileri (Denetim)",
+  "access.subtitle": "Hangi kullanıcının hangi boyutta kısıtlı erişimi olduğunu tek ekranda görün ve düzenleyin.",
+  "access.searchPlaceholder": "Kullanıcı adı veya e-posta ara...",
+  "access.onlyRestricted": "Sadece kısıtlı kullanıcılar",
+  "access.user": "Kullanıcı",
+  "access.fullAccess": "Tüm",
+  "access.restrictedCount": "{count} üye",
+  "access.editButton": "Düzenle",
+  "access.empty": "Kullanıcı bulunamadı",
+  "access.editorHint": "Boş bırakılan boyut = tam erişim. Seçim yapılan boyutta kullanıcı yalnızca seçilen üyeleri (ve altlarını) görür/yazar.",
 } as const;
 
 const en: Record<keyof typeof tr, string> = {
@@ -201,6 +212,7 @@ const en: Record<keyof typeof tr, string> = {
   "nav.integrations": "Integrations",
   "nav.ai": "AI Query",
   "nav.users": "Users",
+  "nav.access": "Data Access",
   "nav.audit": "Audit Log",
   "nav.workflow": "Workflow",
   "nav.scenarios": "Scenarios",
@@ -374,6 +386,16 @@ const en: Record<keyof typeof tr, string> = {
   "apiKeys.lastUsed": "Last used: {date}",
   "apiKeys.neverUsed": "Never used",
   "apiKeys.confirmRevoke": "Revoke this key? Any integration using it will lose access.",
+  "access.title": "Data Access (Audit)",
+  "access.subtitle": "See and edit which users have restricted access to which dimension, in one screen.",
+  "access.searchPlaceholder": "Search by user name or email...",
+  "access.onlyRestricted": "Only restricted users",
+  "access.user": "User",
+  "access.fullAccess": "Full",
+  "access.restrictedCount": "{count} members",
+  "access.editButton": "Edit",
+  "access.empty": "No users found",
+  "access.editorHint": "An empty dimension selection means full access. For a selected dimension the user only sees/writes the chosen members (and descendants).",
 };
 
 export type TKey = keyof typeof tr;

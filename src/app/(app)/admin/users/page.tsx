@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { getT, LOCALE_COOKIE, type Locale, type TKey } from "@/lib/i18n";
-import MemberPicker from "@/components/MemberPicker";
+import { getT, LOCALE_COOKIE, type Locale } from "@/lib/i18n";
+import DataAccessEditor from "@/components/DataAccessEditor";
 import type { Member } from "@/lib/pivot";
 
 type UserRow = {
@@ -35,7 +35,6 @@ export default function UsersPage() {
   const [dims, setDims] = useState<Dim[]>([]);
   const [accessUser, setAccessUser] = useState<UserRow | null>(null);
   const [accessMap, setAccessMap] = useState<Record<number, string[]>>({});
-  const [accessMsg, setAccessMsg] = useState<string | null>(null);
 
   const load = useCallback(() => {
     fetch("/api/users")
@@ -52,7 +51,6 @@ export default function UsersPage() {
   }, [load]);
 
   async function openAccess(u: UserRow) {
-    setAccessMsg(null);
     const res = await fetch(`/api/users/${u.id}/access`);
     const entries: Array<{ dimensionId: number; memberCodes: string[] }> = res.ok
       ? await res.json()
@@ -61,19 +59,6 @@ export default function UsersPage() {
     for (const e of entries) map[e.dimensionId] = e.memberCodes;
     setAccessMap(map);
     setAccessUser(u);
-  }
-
-  async function saveAccess() {
-    if (!accessUser) return;
-    const entries = Object.entries(accessMap)
-      .map(([dimId, codes]) => ({ dimensionId: Number(dimId), memberCodes: codes }))
-      .filter((e) => e.memberCodes.length > 0);
-    const res = await fetch(`/api/users/${accessUser.id}/access`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ entries }),
-    });
-    setAccessMsg(res.ok ? "✅ Veri yetkisi kaydedildi" : "Kaydetme başarısız");
   }
 
   async function createUser(e: React.FormEvent) {
@@ -120,7 +105,12 @@ export default function UsersPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-slate-800">{t("users.title")}</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-slate-800">{t("users.title")}</h1>
+        <a href="/admin/access" className="text-sm text-blue-600 hover:text-blue-800">
+          🔐 {t("nav.access")} →
+        </a>
+      </div>
 
       <div className="mt-6 rounded-xl bg-white p-5 shadow-sm">
         <h2 className="mb-4 text-sm font-semibold text-slate-600">{t("users.new")}</h2>
@@ -234,43 +224,15 @@ export default function UsersPage() {
       </div>
 
       {accessUser && (
-        <div className="mt-6 rounded-xl border-2 border-blue-200 bg-white p-5 shadow-sm">
-          <div className="flex items-center gap-3">
-            <h2 className="text-sm font-semibold text-slate-700">
-              🔐 Veri Yetkisi — {accessUser.name}
-            </h2>
-            <span className="text-xs text-slate-400">
-              Boş bırakılan boyut = tam erişim. Seçim yapılan boyutta kullanıcı yalnızca
-              seçilen üyeleri (ve altlarını) görür/yazar.
-            </span>
-            <button
-              onClick={() => setAccessUser(null)}
-              className="ml-auto text-slate-400 hover:text-slate-700"
-            >
-              ✕
-            </button>
-          </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {dims.map((d) => (
-              <MemberPicker
-                key={d.id}
-                label={d.name}
-                members={d.members}
-                selected={accessMap[d.id] ?? []}
-                onChange={(codes) => setAccessMap({ ...accessMap, [d.id]: codes })}
-              />
-            ))}
-          </div>
-          <div className="mt-3 flex items-center gap-3">
-            <button
-              onClick={saveAccess}
-              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
-            >
-              Kaydet
-            </button>
-            {accessMsg && <span className="text-sm text-slate-500">{accessMsg}</span>}
-          </div>
-        </div>
+        <DataAccessEditor
+          userId={accessUser.id}
+          userName={accessUser.name}
+          dims={dims}
+          initialMap={accessMap}
+          t={t}
+          onClose={() => setAccessUser(null)}
+          onSaved={(map) => setAccessMap(map)}
+        />
       )}
     </div>
   );

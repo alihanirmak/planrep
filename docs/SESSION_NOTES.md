@@ -2,6 +2,14 @@
 
 > Amaç: "kalınan yer" her zaman burada net olsun. Yeni bir oturuma başlarken önce bu dosyayı oku.
 
+## Kalıcı kullanıcı tercihi (2026-06-10)
+
+- **Git için onay istenmeyecek**: kullanıcı her commit/push öncesi onay akışını
+  kaldırdı — her madde tamamlandığında (test/lint/typecheck/build yeşil
+  olduktan sonra) commit+push otomatik yapılır, ayrıca sorulmaz.
+- **Git kullanıcısı**: `alihanirmak` ile ilerlenecek (remote zaten
+  `github.com/alihanirmak/planrep.git`).
+
 ## 2026-06-10 — Faz 3 / Sprint 3.1 madde 1 (2FA/TOTP) DOĞRULANDI
 
 - Önceki oturumda (bu oturumun başlangıcında geçmişi görünmüyordu — proje git
@@ -221,4 +229,15 @@ Tamamlanan Faz 3 maddeleri (hepsi ayrı commit):
   `listNotifications` limit parametresi NaN'a karşı korundu. 11 yeni test
   (`route-params.test.ts`, `rate-limit.test.ts`) — toplam **286 test**.
   Lint/typecheck/build temiz. Must-Have tablosu madde 12 "Tamamlandı"
+  işaretlendi. Commit+push edildi (909dd8c).
+
+- **Madde 5 (satır-seviyesi güvenlik admin UI) tamamlandı (2026-06-10):**
+  Yeni `/admin/access` denetim matrisi sayfası — kullanıcı × boyut, her
+  hücre "Tüm"/"N üye" rozeti, tıklanınca düzenleme paneli açılır. Yeni
+  `GET /api/access` (bulk, admin-only) + `lib/access.ts` → `getTenantAccessEntries`.
+  Satır-içi düzenleme paneli `components/DataAccessEditor.tsx`'e çıkarılıp
+  hem eski `/admin/users` hem yeni sayfa aynı bileşeni kullanıyor. Nav + i18n
+  (`access.*`) eklendi. 2 yeni test — toplam **288 test**. Gerçek `next dev`
+  sunucusuna karşı login→PUT→GET→sayfa render tam döngüsü manuel doğrulandı.
+  Lint/typecheck/build temiz. Must-Have tablosu madde 5 "Tamamlandı"
   işaretlendi. **Henüz commit edilmedi, sıradaki adım commit+push.**

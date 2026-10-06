@@ -17,6 +17,8 @@ let allowedSets: typeof import("./access")["allowedSets"];
 let getUserAccess: typeof import("./access")["getUserAccess"];
 let setUserAccess: typeof import("./access")["setUserAccess"];
 let canAccessCommentEntity: typeof import("./access")["canAccessCommentEntity"];
+let getTenantAccessEntries: typeof import("./access")["getTenantAccessEntries"];
+let createTenant: typeof import("./tenant")["createTenant"];
 let sqlite: typeof import("./db")["sqlite"];
 
 beforeAll(async () => {
@@ -28,6 +30,9 @@ beforeAll(async () => {
   getUserAccess = access.getUserAccess;
   setUserAccess = access.setUserAccess;
   canAccessCommentEntity = access.canAccessCommentEntity;
+  getTenantAccessEntries = access.getTenantAccessEntries;
+  const tenant = await import("./tenant");
+  createTenant = tenant.createTenant;
   const db = await import("./db");
   sqlite = db.sqlite;
 });
@@ -198,3 +203,40 @@ describe("canAccessCommentEntity", () => {
 function fakeSession(id: number, role: SessionUser["role"]): SessionUser {
   return { id, tenantId: 1, role, email: `${id}@test.local`, name: `User ${id}`, locale: "tr" };
 }
+
+describe("getTenantAccessEntries", () => {
+  const now = new Date().toISOString();
+
+  it("sadece verilen tenant'a ait kullanicilarin erisim kayitlarini doner", () => {
+    const tenantA = createTenant({ code: "access-test-a", name: "Access Test A" });
+    const tenantB = createTenant({ code: "access-test-b", name: "Access Test B" });
+    const userAId = Number(
+      sqlite
+        .prepare(
+          "INSERT INTO users (tenant_id, email, name, password_hash, role, created_at) VALUES (?,?,?,?,?,?)"
+        )
+        .run(tenantA.id, "overview-a@test.local", "User A", "x", "planner", now).lastInsertRowid
+    );
+    const userBId = Number(
+      sqlite
+        .prepare(
+          "INSERT INTO users (tenant_id, email, name, password_hash, role, created_at) VALUES (?,?,?,?,?,?)"
+        )
+        .run(tenantB.id, "overview-b@test.local", "User B", "x", "planner", now).lastInsertRowid
+    );
+
+    setUserAccess(userAId, [{ dimensionId: 1, memberCodes: ["CC100"] }]);
+    setUserAccess(userBId, [{ dimensionId: 1, memberCodes: ["CC200"] }]);
+
+    const entriesA = getTenantAccessEntries(tenantA.id);
+    expect(entriesA).toEqual([{ userId: userAId, dimensionId: 1, memberCodes: ["CC100"] }]);
+
+    const entriesB = getTenantAccessEntries(tenantB.id);
+    expect(entriesB).toEqual([{ userId: userBId, dimensionId: 1, memberCodes: ["CC200"] }]);
+  });
+
+  it("kisitlamasi olmayan tenant icin bos dizi doner", () => {
+    const emptyTenant = createTenant({ code: "access-test-empty", name: "Access Test Empty" });
+    expect(getTenantAccessEntries(emptyTenant.id)).toEqual([]);
+  });
+});
