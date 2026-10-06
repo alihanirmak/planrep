@@ -865,7 +865,7 @@ export default function ReportsPage() {
         <select
           value={currentId ?? ""}
           onChange={(e) => (e.target.value === "" ? newReport() : loadReport(Number(e.target.value)))}
-          className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-700"
+          className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-700 sm:w-auto"
         >
           <option value="">— Yeni rapor —</option>
           {saved.map((r) => (

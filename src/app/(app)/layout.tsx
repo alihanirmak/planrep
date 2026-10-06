@@ -17,9 +17,9 @@ export default async function AppLayout({
     store.get(LOCALE_COOKIE)?.value === "en" ? "en" : "tr";
 
   return (
-    <div className="flex min-h-screen bg-slate-100">
+    <div className="flex min-h-screen flex-col bg-slate-100 md:flex-row">
       <Sidebar user={session} locale={locale} />
-      <main className="flex-1 overflow-x-auto p-8">{children}</main>
+      <main className="flex-1 overflow-x-auto p-4 md:p-8">{children}</main>
     </div>
   );
 }

@@ -177,7 +177,25 @@ geçilmeyecek. Commit/push kararı da kullanıcı onayına bağlı (bu oturumda 
 maddeden sonra "önce commit+push yap" seçildi — yani her madde sonunda değil,
 kullanıcı istediğinde commit atılıyor).
 
-## Sıradaki adım
+## Sıradaki adım (güncel — Sprint 2.3 tamamlandı, Faz 3 devam ediyor)
 
-- Madde 1 (connector plugin) için commit + push yapılacak, sonra madde 2
-  (a11y) için onay istenecek.
+Sprint 2.3'ün 5 maddesi de tamamlandı. Devamında Faz 3 (Sprint 3.1/3.2/3.3)
+üzerinde, aynı "madde tek tek + kullanıcı onayı + her maddeden sonra ayrı
+commit+push" çalışma şekliyle ilerlendi. Detaylı teknik gerekçeler artık
+`docs/ROADMAP.md`'deki ilgili madde notlarında tutuluyor (bu dosyadaki eski
+ayrıntı yerine orası güncel kaynak).
+
+Tamamlanan Faz 3 maddeleri (hepsi ayrı commit):
+1. Sprint 3.1 madde 1 — 2FA/TOTP
+2. Sprint 3.1 madde 2 — SSO/OIDC
+3. Sprint 3.1 madde 3 — Çoklu-tenant/organizasyon desteği
+4. Sprint 3.2 madde 1 — Virtualized pivot grid
+5. Sprint 3.2 madde 2 — Redis caching
+6. Sprint 3.2 madde 3 — Real-time collaboration / optimistic concurrency
+7. Sprint 3.3 madde 1 — BI export API / REST-OData
+8. Sprint 3.3 madde 2 — Mobil/responsive dashboard + PWA desteği
+
+- Sıradaki: Sprint 3.3 madde 2 için commit + push yapılacak, sonra madde 3
+  (anomali tespiti / AI destekli forecast) için kullanıcıdan onay istenecek.
+  Karmaşık maddeler kullanıcı talebiyle alt-adımlara bölünerek ilerleniyor
+  (timeout riskini azaltmak için).

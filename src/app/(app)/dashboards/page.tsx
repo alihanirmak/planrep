@@ -291,7 +291,7 @@ export default function DashboardsPage() {
         <select
           value={currentId ?? ""}
           onChange={(e) => (e.target.value === "" ? newDashboard() : loadDashboard(Number(e.target.value)))}
-          className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-900"
+          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-900 sm:w-auto"
         >
           <option value="">— Yeni dashboard —</option>
           {saved.map((d) => (
@@ -308,7 +308,7 @@ export default function DashboardsPage() {
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-900"
+          className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-900 sm:w-auto"
         />
         <label className="flex items-center gap-1.5 text-sm text-slate-600">
           <input type="checkbox" checked={shared} onChange={(e) => setShared(e.target.checked)} />
