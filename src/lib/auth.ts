@@ -11,6 +11,10 @@ export {
   createSessionToken,
   verifySessionToken,
   sessionCookieOptions,
+  PREAUTH_COOKIE,
+  createPreAuthToken,
+  verifyPreAuthToken,
+  preAuthCookieOptions,
   type Role,
   type SessionUser,
 } from "./session";

@@ -19,6 +19,7 @@ const NAV: Array<{ href: string; key: TKey; icon: string; adminOnly?: boolean }>
   { href: "/integrations", key: "nav.integrations", icon: "🔌" },
   { href: "/admin/users", key: "nav.users", icon: "👥", adminOnly: true },
   { href: "/admin/audit", key: "nav.audit", icon: "📜", adminOnly: true },
+  { href: "/account/security", key: "nav.security", icon: "🔐" },
 ];
 
 function setLocaleCookie(next: Locale) {

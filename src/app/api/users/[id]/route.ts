@@ -17,6 +17,10 @@ const patchSchema = z.object({
   role: z.enum(["admin", "planner", "viewer"]).optional(),
   password: z.string().min(6).optional(),
   locale: z.enum(["tr", "en"]).optional(),
+  // Admin, cihazini kaybeden bir kullanicinin 2FA'sini sifre dogrulamadan
+  // zorla kapatabilir (kurtarma yolu — bkz. account/security sayfasindaki
+  // self-service disable, o normal akis icin sifre ister).
+  disableTotp: z.literal(true).optional(),
 });
 
 export async function PATCH(
@@ -38,7 +42,7 @@ export async function PATCH(
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  const { name, role, password, locale } = parsed.data;
+  const { name, role, password, locale, disableTotp } = parsed.data;
 
   // Son admin'in rolu dusurulemez — TOCTOU'yu engellemek icin kontrol ve
   // guncelleme ayni senkron transaction icinde (await yok, yarisma riski yok).
@@ -52,6 +56,7 @@ export async function PATCH(
         ...(role ? { role } : {}),
         ...(locale ? { locale } : {}),
         ...(password ? { passwordHash: hashPassword(password) } : {}),
+        ...(disableTotp ? { totpEnabled: 0, totpSecret: null, totpBackupCodes: null } : {}),
       })
       .where(eq(users.id, id))
       .run();
@@ -62,7 +67,13 @@ export async function PATCH(
     return NextResponse.json({ error: txResult.error }, { status: 400 });
   }
 
-  logAudit(session.id, "user.update", "user", id, { name, role, locale, passwordChanged: !!password });
+  logAudit(session.id, "user.update", "user", id, {
+    name,
+    role,
+    locale,
+    passwordChanged: !!password,
+    totpDisabled: !!disableTotp,
+  });
   return NextResponse.json({ ok: true });
 }
 

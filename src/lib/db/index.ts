@@ -217,6 +217,9 @@ for (const migration of [
   "ALTER TABLE dimensions ADD COLUMN description TEXT",
   "ALTER TABLE dimensions ADD COLUMN visibility TEXT NOT NULL DEFAULT 'public'",
   "ALTER TABLE dimensions ADD COLUMN owner_model_id INTEGER",
+  "ALTER TABLE users ADD COLUMN totp_secret TEXT",
+  "ALTER TABLE users ADD COLUMN totp_enabled INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE users ADD COLUMN totp_backup_codes TEXT",
 ]) {
   try {
     sqlite.exec(migration);

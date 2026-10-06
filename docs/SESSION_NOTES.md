@@ -2,7 +2,43 @@
 
 > Amaç: "kalınan yer" her zaman burada net olsun. Yeni bir oturuma başlarken önce bu dosyayı oku.
 
-## 2026-06-10 — Faz 2 / Sprint 2.3 BAŞLADI (madde-madde çalışılıyor)
+## 2026-06-10 — Faz 3 / Sprint 3.1 madde 1 (2FA/TOTP) DOĞRULANDI
+
+- Önceki oturumda (bu oturumun başlangıcında geçmişi görünmüyordu — proje git
+  repo değil, konuşma geçmişi de taşınmamıştı) 2FA/TOTP işi zaten kod olarak
+  tamamlanmış bulundu ama `ROADMAP.md`'de hâlâ `[ ]` işaretliydi ve commit
+  edilmemişti. Bu oturumda kod tek tek incelendi ve çalıştırılarak doğrulandı:
+  - `lib/db/schema.ts` (totp kolonları), `lib/totp.ts` (RFC 6238/4226),
+    `lib/totp-user.ts`, `/api/auth/totp/*` + `/api/auth/login/totp`,
+    `login/page.tsx` (2 adımlı form), `account/security/page.tsx`, i18n.
+  - `npm test` → **181/181 test geçti** (16'sı `totp.test.ts`).
+  - `tsc --noEmit` → temiz. `eslint` → 0 hata (2 ön-var olan ilgisiz uyarı).
+  - `next build` → başarılı (3 pre-existing ilgisiz uyarı, TOTP ile ilgisiz).
+  - `ROADMAP.md` Sprint 3.1 madde 1 `[x]` yapıldı, tamamlama notu eklendi.
+- **Düzeltme:** İlk bakışta `C:\workspace\NTT PLA&REP` (dış klasör) git repo
+  değildi diye yanlışlıkla orada `git init` çalıştırıldı — bu HATAYDI, hemen
+  geri alındı (`.git` silindi). Gerçek repo `planrep/` klasörünün kendisi
+  (origin: `github.com/alihanirmak/planrep.git`), 17 commit (`74086e9`
+  initial'dan `669f395`'e kadar, origin/main'in **12 commit ilerisinde**,
+  henüz push edilmemiş). ROADMAP/SESSION_NOTES'taki tüm commit hash'leri
+  (`ec421f3`, `bfb05ed`, `3a6e4f2`, `e3da2a5`, `c64f453`, `820c007`,
+  `347d0ae`, `c35e04c`, `2cdd86c`, `60fc6fd`, `5b6e3b7`, `669f395`) `git log`
+  ile birebir doğrulandı. **2FA/TOTP (Sprint 3.1 madde 1) işi bu commit'lerin
+  HİÇBİRİNDE yok — tamamen commit edilmemiş çalışma kopyası (working tree)
+  değişikliği**, bu oturumun teşhisiyle tutarlı.
+- Faz 0 "git repo'ya alma" maddesi fiilen doğru (`planrep/` içinde zaten
+  git var) — önceki yanlış teşhis (dış klasöre bakıp "repo yok" denmesi)
+  düzeltildi, ROADMAP'te değişiklik gerekmiyor.
+
+## Sıradaki adım
+
+- 2FA/TOTP çalışması (11 değişen + 7 yeni dosya, `docs/` dahil) henüz
+  commit edilmedi — kullanıcıdan commit onayı istenecek, sonra Sprint 3.1
+  madde 2 (SSO) için onay istenecek.
+
+---
+
+## 2026-06-10 (önceki alt-bölüm) — Faz 2 / Sprint 2.3 BAŞLADI (madde-madde çalışılıyor)
 
 ### Önceki kayıtlar (değişmedi)
 - Faz 1 (Sprint 1.1 `ec421f3` + Sprint 1.2 `bfb05ed`)

@@ -5,8 +5,11 @@ import { db, users } from "@/lib/db";
 import {
   checkPassword,
   createSessionToken,
+  createPreAuthToken,
   SESSION_COOKIE,
+  PREAUTH_COOKIE,
   sessionCookieOptions,
+  preAuthCookieOptions,
 } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
 
@@ -25,6 +28,16 @@ export async function POST(req: Request) {
   const user = db.select().from(users).where(eq(users.email, email)).get();
   if (!user || !checkPassword(password, user.passwordHash)) {
     return NextResponse.json({ error: "invalid_credentials" }, { status: 401 });
+  }
+
+  // 2FA aktifse once "sifre dogrulandi, TOTP bekleniyor" durumuna gecilir —
+  // tam oturum (SESSION_COOKIE) HENUZ verilmez. Istemci /api/auth/login/totp'a
+  // kodu gonderip oturumu tamamlar (bkz. src/app/login/page.tsx).
+  if (user.totpEnabled) {
+    const preAuthToken = await createPreAuthToken(user.id);
+    const res = NextResponse.json({ requiresTotp: true });
+    res.cookies.set(PREAUTH_COOKIE, preAuthToken, preAuthCookieOptions());
+    return res;
   }
 
   const token = await createSessionToken({

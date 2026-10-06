@@ -66,3 +66,42 @@ export async function verifySessionToken(
     return null;
   }
 }
+
+// --- 2FA ara-oturum (pre-auth) tokeni ---
+//
+// Sifre dogru ama 2FA kodu henuz girilmemisken, tam SESSION_COOKIE
+// verilmeden once kullaniciyi "parola dogrulandi, TOTP kodu bekleniyor"
+// durumunda tutmak icin kisa omurlu, AYRI bir cookie/token. Normal oturum
+// tokeninden kasitli olarak farkli bir "purpose" claim'i tasir ki biri
+// yanlislikla pre-auth tokenini session olarak kullanamasin (verifySessionToken
+// bu payload'u SessionUser olarak kabul etmez — role/email alanlari yok).
+export const PREAUTH_COOKIE = "planrep_preauth";
+const PREAUTH_MAX_AGE_SECONDS = 5 * 60; // 5 dakika
+
+export async function createPreAuthToken(userId: number): Promise<string> {
+  return await new SignJWT({ purpose: "2fa-pending", userId })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime(`${PREAUTH_MAX_AGE_SECONDS}s`)
+    .sign(secret);
+}
+
+export async function verifyPreAuthToken(token: string): Promise<number | null> {
+  try {
+    const { payload } = await jwtVerify(token, secret);
+    if (payload.purpose !== "2fa-pending" || typeof payload.userId !== "number") return null;
+    return payload.userId;
+  } catch {
+    return null;
+  }
+}
+
+export function preAuthCookieOptions() {
+  return {
+    httpOnly: true,
+    sameSite: "lax" as const,
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: PREAUTH_MAX_AGE_SECONDS,
+  };
+}

@@ -17,6 +17,15 @@ export const users = sqliteTable("users", {
     .default("viewer"),
   locale: text("locale").notNull().default("tr"),
   createdAt: text("created_at").notNull(),
+  // 2FA (TOTP, RFC 6238): totpSecret kurulum sirasinda (enable() oncesi,
+  // henuz onaylanmamis "pending" durumda) ve onaylandiktan sonra ayni
+  // kolonda saklanir — totpEnabled=0 iken secret "pending" (henuz dogrulanmamis
+  // kurulum), totpEnabled=1 iken aktif secret'tir. totpBackupCodes: JSON
+  // string[] (bcrypt hash'leri) — cihaz kaybinda kurtarma icin, her biri
+  // tek kullanimlik (kullanildiginda listeden cikarilir).
+  totpSecret: text("totp_secret"),
+  totpEnabled: integer("totp_enabled").notNull().default(0),
+  totpBackupCodes: text("totp_backup_codes"),
 });
 
 export const dimensions = sqliteTable("dimensions", {

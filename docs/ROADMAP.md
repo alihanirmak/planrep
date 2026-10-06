@@ -86,7 +86,7 @@
 
 ### Sprint 3.1 — Kimlik & çoklu-tenant
 
-1. [ ] 2FA desteği — kullanıcı başına TOTP secret + login'de doğrulama; kendi içinde kapalı, şema/erişim modelini geniş çaplı etkilemiyor (grubun en basiti).
+1. [x] 2FA desteği — kullanıcı başına TOTP secret + login'de doğrulama; kendi içinde kapalı, şema/erişim modelini geniş çaplı etkilemiyor (grubun en basiti). — ✅ tamamlandı (2026-06-10, bu oturumda doğrulandı, henüz commit edilmedi — proje git repo değil): `users` tablosuna `totp_secret`/`totp_enabled`/`totp_backup_codes` kolonları eklendi (`lib/db/schema.ts`). `lib/totp.ts` bağımlılıksız RFC 6238/4226 (HOTP/TOTP, base32, otpauth:// URI, bcrypt'li yedek kurtarma kodları) implementasyonu; `lib/totp-user.ts` DB işlemleri (setup/enable/disable/backup code tüketimi, TOCTOU-güvenli). `/api/auth/totp/{setup,enable,disable,status}` + login akışına ikinci adım `/api/auth/login/totp` (pre-auth JWT ile köprülenmiş — `lib/session.ts` `PREAUTH_COOKIE`). UI: `login/page.tsx` iki adımlı form, `account/security/page.tsx` kurulum/devre dışı bırakma ekranı, Sidebar'a nav linki. i18n (`security.*`, `login.totp*`) tam kapsamlı. 16 yeni test (`totp.test.ts`) — toplam **181 test**, hepsi geçiyor. Lint (0 hata, 2 ön-var olan ilgisiz uyarı)/typecheck/build hepsi temiz.
 2. [ ] SSO entegrasyonu (SAML/OAuth2/Okta/Azure AD) — harici IdP ile login akışı + otomatik kullanıcı provisioning; 2FA'dan sonra orta karmaşıklık.
 3. [ ] Çoklu-tenant / organizasyon desteği — tüm tablolara `tenant_id`, tüm sorgu/route/erişim kontrolü katmanının gözden geçirilmesi; en mimari-invaziv iş, bu grupta en sona bırakıldı.
 
