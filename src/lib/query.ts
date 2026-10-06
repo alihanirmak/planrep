@@ -1,5 +1,5 @@
 import { sqlite } from "./db";
-import { getModelDims, type Member } from "./model";
+import { getModelDims, rootMembers, type Member } from "./model";
 import { allowedSets } from "./access";
 import { buildFactWhereVariants, sumGroupedRows, MAX_AGGREGATE_RESULT_ROWS } from "./fact-filters";
 import type { QueryResult, QueryRow } from "./report-types";
@@ -9,17 +9,44 @@ export function runQuery(
   rowDim: string,
   colDim: string,
   filters: Record<string, string[]>,
-  userId?: number
+  userId?: number,
+  pagination?: { page: number; pageSize: number }
 ): QueryResult | { error: string } {
   const dims = getModelDims(modelId);
   const rowD = dims.find((d) => d.code === rowDim);
   const colD = dims.find((d) => d.code === colDim);
   if (!rowD || !colD || rowDim === colDim) return { error: "invalid_dims" };
 
+  // Sayfalama: rowDim'in kok uyeleri sayfalanir, her sayfaya secilen kok
+  // uyelerin TUM alt agaci (withDescendants, buildFactWhereVariants icinde)
+  // dahil edilir — boylece sayfadaki her satirin toplami her zaman dogru
+  // hesaplanir (sadece hangi kok uyelerin gosterildigi sinirlanir). colTotals/
+  // grandTotal da SADECE o sayfanin kok uyelerini kapsar (bkz. QueryResult.pagination).
+  const allRoots = rootMembers(rowD.members);
+  const pageRoots = pagination
+    ? allRoots.slice(pagination.page * pagination.pageSize, (pagination.page + 1) * pagination.pageSize)
+    : allRoots;
+  let effectiveFilters = filters;
+  if (pagination) {
+    const pageRootCodes = pageRoots.map((m) => m.code);
+    const existing = filters[rowDim];
+    const rowCodes =
+      existing && existing.length > 0 ? pageRootCodes.filter((c) => existing.includes(c)) : pageRootCodes;
+    effectiveFilters = { ...filters, [rowDim]: rowCodes };
+  }
+
   const access = userId != null ? allowedSets(userId, dims) : new Map<string, Set<string>>();
-  const { variants, empty } = buildFactWhereVariants(modelId, dims, filters, access);
+  const { variants, empty } = buildFactWhereVariants(modelId, dims, effectiveFilters, access);
   if (empty) {
-    return { rows: [], cols: [], colTotals: {}, grandTotal: 0 };
+    return {
+      rows: [],
+      cols: [],
+      colTotals: {},
+      grandTotal: 0,
+      ...(pagination
+        ? { pagination: { page: pagination.page, pageSize: pagination.pageSize, totalRoots: allRoots.length } }
+        : {}),
+    };
   }
 
   const partials = variants.map(
@@ -90,11 +117,11 @@ export function runQuery(
       walk(kids, depth + 1);
     }
   }
-  walk(children.get(null) ?? [], 0);
+  walk(pageRoots, 0);
 
   const colTotals: Record<string, number> = {};
   let grandTotal = 0;
-  for (const m of children.get(null) ?? []) {
+  for (const m of pageRoots) {
     const cells = cellsOf(m);
     for (const [c, v] of Object.entries(cells)) {
       colTotals[c] = (colTotals[c] ?? 0) + v;
@@ -102,5 +129,13 @@ export function runQuery(
     }
   }
 
-  return { rows, cols, colTotals, grandTotal };
+  return {
+    rows,
+    cols,
+    colTotals,
+    grandTotal,
+    ...(pagination
+      ? { pagination: { page: pagination.page, pageSize: pagination.pageSize, totalRoots: allRoots.length } }
+      : {}),
+  };
 }

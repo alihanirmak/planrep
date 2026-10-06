@@ -119,6 +119,48 @@ describe("runQuery", () => {
   });
 });
 
+describe("runQuery — sayfalama (pagination)", () => {
+  it("pagination verilmezse sonucta pagination alani olmaz (geriye donuk uyumluluk)", () => {
+    const result = runQuery(modelId, "VER", "CC", {});
+    if ("error" in result) throw new Error("hata bekleniyordu yoktu: " + result.error);
+    expect(result.pagination).toBeUndefined();
+  });
+
+  it("ilk sayfa (pageSize=1) VER'in sadece ilk kok uyesini (BUDGET) dondurur", () => {
+    const result = runQuery(modelId, "VER", "CC", {}, undefined, { page: 0, pageSize: 1 });
+    if ("error" in result) throw new Error("hata bekleniyordu yoktu: " + result.error);
+    expect(result.pagination).toEqual({ page: 0, pageSize: 1, totalRoots: 2 });
+    expect(result.rows.map((r) => r.code)).toEqual(["BUDGET"]);
+    expect(result.rows[0].total).toBe(CHILD_COUNT * 10);
+    expect(result.grandTotal).toBe(CHILD_COUNT * 10);
+  });
+
+  it("ikinci sayfa (pageSize=1) VER'in ikinci kok uyesini (ACTUAL) dondurur", () => {
+    const result = runQuery(modelId, "VER", "CC", {}, undefined, { page: 1, pageSize: 1 });
+    if ("error" in result) throw new Error("hata bekleniyordu yoktu: " + result.error);
+    expect(result.pagination).toEqual({ page: 1, pageSize: 1, totalRoots: 2 });
+    expect(result.rows.map((r) => r.code)).toEqual(["ACTUAL"]);
+    expect(result.rows[0].total).toBe(CHILD_COUNT * 5);
+  });
+
+  it("sinirlarin disindaki sayfa bos satir listesi dondurur ama totalRoots dogru kalir", () => {
+    const result = runQuery(modelId, "VER", "CC", {}, undefined, { page: 5, pageSize: 1 });
+    if ("error" in result) throw new Error("hata bekleniyordu yoktu: " + result.error);
+    expect(result.rows).toEqual([]);
+    expect(result.pagination).toEqual({ page: 5, pageSize: 1, totalRoots: 2 });
+  });
+
+  it("her sayfadaki satirin alt-agac toplami (CC_ALL rollup) sayfalama ile de dogru hesaplanir", () => {
+    const result = runQuery(modelId, "CC", "VER", {}, undefined, { page: 0, pageSize: 10 });
+    if ("error" in result) throw new Error("hata bekleniyordu yoktu: " + result.error);
+    // CC boyutunun tek kok uyesi CC_ALL oldugu icin page 0 CC_ALL'i icerir;
+    // CC_ALL'in alt agac toplami (450 cocuk) sayfalamadan etkilenmemeli.
+    expect(result.pagination).toEqual({ page: 0, pageSize: 10, totalRoots: 1 });
+    const rootRow = result.rows.find((r) => r.code === "CC_ALL");
+    expect(rootRow?.total).toBe(CHILD_COUNT * 15);
+  });
+});
+
 async function ccDimensionId(): Promise<number> {
   const row = sqlite.prepare("SELECT id FROM dimensions WHERE code='CC'").get() as { id: number };
   return row.id;

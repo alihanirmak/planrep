@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { sqlite } from "@/lib/db";
-import { getModelDims } from "@/lib/model";
+import { getModelDims, rootMembers } from "@/lib/model";
 import { allowedSets } from "@/lib/access";
 import { buildFactWhereVariants, sumGroupedRows, MAX_AGGREGATE_RESULT_ROWS } from "@/lib/fact-filters";
 
@@ -11,6 +11,8 @@ const bodySchema = z.object({
   rows: z.array(z.string()).min(1).max(3),
   cols: z.array(z.string()).min(1).max(2),
   filters: z.record(z.string(), z.array(z.string())).default({}),
+  page: z.number().int().min(0).optional(),
+  pageSize: z.number().int().min(1).max(1000).optional(),
 });
 
 export async function POST(req: Request) {
@@ -21,7 +23,7 @@ export async function POST(req: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
   }
-  const { modelId, rows, cols, filters } = parsed.data;
+  const { modelId, rows, cols, filters, page, pageSize } = parsed.data;
 
   const dims = getModelDims(modelId);
   const axis = [...rows, ...cols];
@@ -34,9 +36,33 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "invalid_dims" }, { status: 400 });
   }
 
+  // Sayfalama: ilk satir boyutunun (rows[0]) kok uyeleri sayfalanir, sayfaya
+  // secilen kok uyelerin TUM alt agaci dahil edilir — boylece client'ta
+  // createPivotEngine ile kurulan agacin satir toplamlari her zaman dogru
+  // kalir (sadece hangi kok uyelerin gosterildigi sinirlanir). colTotals/
+  // grandTotal (createPivotEngine'da donen tuples'tan hesaplanir) bu durumda
+  // SADECE o sayfanin verisini yansitir — /api/query ile ayni semantik.
+  const firstRowDim = rowD[0]!;
+  const allRoots = rootMembers(firstRowDim.members);
+  const pagination = page != null && pageSize != null ? { page, pageSize } : undefined;
+  const pageRoots = pagination ? allRoots.slice(page! * pageSize!, (page! + 1) * pageSize!) : allRoots;
+  let effectiveFilters = filters;
+  if (pagination) {
+    const pageRootCodes = pageRoots.map((m) => m.code);
+    const existing = filters[firstRowDim.code];
+    const rowCodes =
+      existing && existing.length > 0 ? pageRootCodes.filter((c) => existing.includes(c)) : pageRootCodes;
+    effectiveFilters = { ...filters, [firstRowDim.code]: rowCodes };
+  }
+
   const access = allowedSets(session.id, dims);
-  const { variants, empty } = buildFactWhereVariants(modelId, dims, filters, access);
-  if (empty) return NextResponse.json({ tuples: [] });
+  const { variants, empty } = buildFactWhereVariants(modelId, dims, effectiveFilters, access);
+  if (empty) {
+    return NextResponse.json({
+      tuples: [],
+      ...(pagination ? { pagination: { page, pageSize, totalRoots: allRoots.length } } : {}),
+    });
+  }
 
   const rowSel = rowD.map((d, i) => `d${d!.slot} AS r${i}`).join(", ");
   const colSel = colD.map((d, i) => `d${d!.slot} AS c${i}`).join(", ");
@@ -59,7 +85,7 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         error: "result_too_large",
-        message: `Sonuç seti çok büyük (${raw.length} hücre, üst sınır: ${MAX_AGGREGATE_RESULT_ROWS}). Lütfen filtre ekleyin.`,
+        message: `Sonuç seti çok büyük (${raw.length} hücre, üst sınır: ${MAX_AGGREGATE_RESULT_ROWS}). Lütfen filtre ekleyin veya sayfalama kullanın.`,
       },
       { status: 400 }
     );
@@ -71,5 +97,8 @@ export async function POST(req: Request) {
     v: Number(row.v),
   }));
 
-  return NextResponse.json({ tuples });
+  return NextResponse.json({
+    tuples,
+    ...(pagination ? { pagination: { page, pageSize, totalRoots: allRoots.length } } : {}),
+  });
 }

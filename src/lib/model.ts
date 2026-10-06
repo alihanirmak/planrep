@@ -110,3 +110,15 @@ export function withDescendants(members: Member[], codes: string[]): string[] {
   }
   return [...out];
 }
+
+// Bir boyutun hiyerarsisindeki kok (parent'i olmayan ya da parent'i ayni
+// boyutta bulunmayan) uyelerini sira numarasina gore dondurur. Sayfalama
+// icin "sayfa = kok uyelerin bir dilimi" semantigi kullanilir (bkz. query.ts,
+// api/pivot/route.ts) — her kok uyenin alt agaci (withDescendants) tamamen
+// dahil edildigi icin sayfadaki satirlarin toplamlari her zaman dogru kalir.
+export function rootMembers(members: Member[]): Member[] {
+  const byId = new Map(members.map((m) => [m.id, m]));
+  return members
+    .filter((m) => m.parentId == null || !byId.has(m.parentId))
+    .sort((a, b) => a.orderIdx - b.orderIdx || a.id - b.id);
+}

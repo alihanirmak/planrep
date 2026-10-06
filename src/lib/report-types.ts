@@ -88,6 +88,11 @@ export type QueryResult = {
   cols: Array<{ code: string; name: string }>;
   colTotals: Record<string, number>;
   grandTotal: number;
+  // Sadece page/pageSize istenirse doner: rowDim'in kok uyeleri sayfalanir
+  // (her sayfadaki satirlarin alt-agac toplamlari her zaman dogrudur — bkz.
+  // lib/model.ts rootMembers). colTotals/grandTotal SADECE o sayfanin
+  // verisini yansitir (sayfalanmis gorunumun kendi ic toplami).
+  pagination?: { page: number; pageSize: number; totalRoots: number };
 };
 
 export function computeCalcCells(
