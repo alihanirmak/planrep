@@ -169,6 +169,15 @@ CREATE TABLE IF NOT EXISTS fact_audit (
 );
 CREATE INDEX IF NOT EXISTS ix_fact_audit_model ON fact_audit(model_id);
 CREATE INDEX IF NOT EXISTS ix_fact_audit_upload ON fact_audit(upload_id);
+CREATE TABLE IF NOT EXISTS connector_configs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  type TEXT NOT NULL,
+  name TEXT NOT NULL,
+  config TEXT NOT NULL,
+  active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
 `;
 
 sqlite.exec(DDL);

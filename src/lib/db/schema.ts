@@ -231,3 +231,15 @@ export const factAudit = sqliteTable(
   },
   (t) => [index("ix_fact_audit_model").on(t.modelId), index("ix_fact_audit_upload").on(t.uploadId)]
 );
+
+// config: JSON — ConnectorTypeDef'in configFields'ina gore anahtar/deger
+// (ornek sap-odata icin: {url, user, pass, entities}).
+export const connectorConfigs = sqliteTable("connector_configs", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  type: text("type").notNull(),
+  name: text("name").notNull(),
+  config: text("config").notNull(),
+  active: integer("active").notNull().default(1),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});

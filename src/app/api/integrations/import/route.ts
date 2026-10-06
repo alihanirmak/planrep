@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { sqlite } from "@/lib/db";
-import { getConnector } from "@/lib/connectors";
+import { getConnectorInstance } from "@/lib/connectors";
 import { getModelDims } from "@/lib/model";
 import { allowedSets } from "@/lib/access";
 import { upsertFacts } from "@/lib/facts-write";
@@ -14,7 +14,7 @@ import { parseLocaleNumber } from "@/lib/number";
 const MAX_ERRORS = 50;
 
 const schema = z.object({
-  connector: z.string(),
+  connector: z.number().int(),
   source: z.string(),
   modelId: z.number().int(),
   // kaynak kolonu -> boyut kodu veya "DEGER" ("" = yoksay)
@@ -30,8 +30,9 @@ export async function POST(req: Request) {
   if (!parsed.success) return NextResponse.json({ error: "invalid_request" }, { status: 400 });
   const { connector: connectorId, source, modelId, mapping } = parsed.data;
 
-  const connector = getConnector(connectorId);
-  if (!connector) return NextResponse.json({ error: "connector_not_found" }, { status: 404 });
+  const connectorInstance = getConnectorInstance(connectorId);
+  if (!connectorInstance) return NextResponse.json({ error: "connector_not_found" }, { status: 404 });
+  const connector = connectorInstance.connector;
   const dims = getModelDims(modelId);
   if (dims.length === 0) return NextResponse.json({ error: "model_not_found" }, { status: 404 });
 
@@ -79,7 +80,7 @@ export async function POST(req: Request) {
 
   type FactRow = { coords: string[]; value: number };
   const rows: FactRow[] = [];
-  data.rows.forEach((row, idx) => {
+  data.rows.forEach((row: Record<string, string | number>, idx: number) => {
     const coords: string[] = new Array(dims.length).fill("");
     let bad = false;
     dims.forEach((d, di) => {

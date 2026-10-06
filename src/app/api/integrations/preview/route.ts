@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSession } from "@/lib/auth";
-import { getConnector } from "@/lib/connectors";
+import { getConnectorInstance } from "@/lib/connectors";
 
 const schema = z.object({
-  connector: z.string(),
+  connector: z.number().int(),
   source: z.string(),
 });
 
@@ -15,11 +15,11 @@ export async function POST(req: Request) {
   const parsed = schema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "invalid_request" }, { status: 400 });
 
-  const connector = getConnector(parsed.data.connector);
-  if (!connector) return NextResponse.json({ error: "connector_not_found" }, { status: 404 });
+  const instance = getConnectorInstance(parsed.data.connector);
+  if (!instance) return NextResponse.json({ error: "connector_not_found" }, { status: 404 });
 
   try {
-    const result = await connector.fetchRows(parsed.data.source, 20);
+    const result = await instance.connector.fetchRows(parsed.data.source, 20);
     return NextResponse.json(result);
   } catch (e) {
     return NextResponse.json(

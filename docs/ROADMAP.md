@@ -1,7 +1,7 @@
 # PlanRep — Geliştirme Yol Haritası & Takip Listesi
 
 > **Nasıl kullanılır:** Bu dosya yaşayan bir takip listesidir. Bir madde üzerinde çalışmaya başlarken `[ ]` → işe başlandığında yorum/PR linki ekleyin, tamamlandığında `[x]` yapın. Detaylı mimari gerekçeler için `ARCHITECTURE_AUDIT.md`'ye bakın.
-> **Son güncelleme:** 2026-06-10 — Faz 1 (Sprint 1.1 + Sprint 1.2) tamamlandı: lint borcu, cascade cleanup, IN(...) chunking, N+1 optimizasyonu, Docker, DB yedekleme, Postgres geçiş değerlendirmesi, bulk upsert, pivot/query üst sınırı, Vitest test altyapısı. Faz 2 / Sprint 2.1 + Sprint 2.2 tamamlandı: workflow onay akışı (data lock dahil), senaryo kopyalama/karşılaştırma, hücre bazlı audit trail + rollback, formül motoru (IF/SUM/AVG/MIN/MAX + zaman ofseti), iş kuralı (business rule) motoru. Faz 2/3 kalan sprintler devam ediyor.
+> **Son güncelleme:** 2026-06-10 — Faz 1 (Sprint 1.1 + Sprint 1.2) tamamlandı: lint borcu, cascade cleanup, IN(...) chunking, N+1 optimizasyonu, Docker, DB yedekleme, Postgres geçiş değerlendirmesi, bulk upsert, pivot/query üst sınırı, Vitest test altyapısı. Faz 2 / Sprint 2.1 + Sprint 2.2 tamamlandı: workflow onay akışı (data lock dahil), senaryo kopyalama/karşılaştırma, hücre bazlı audit trail + rollback, formül motoru (IF/SUM/AVG/MIN/MAX + zaman ofseti), iş kuralı (business rule) motoru. Sprint 2.3 kısmen tamamlandı: connector plugin mimarisi (dinamik DB-tabanlı bağlantı yönetimi). Kalan Sprint 2.3 maddeleri (a11y, i18n, bildirim, zamanlanmış sync) ve Faz 3 devam ediyor.
 
 ---
 
@@ -56,7 +56,7 @@
 
 ### Sprint 2.3 — Entegrasyon, erişilebilirlik & bildirimler
 
-- [ ] Connector plugin mimarisi (DB'de connector config, dinamik kayıt — statik dizi yerine)
+- [x] Connector plugin mimarisi (DB'de connector config, dinamik kayıt — statik dizi yerine)
 - [ ] Erişilebilirlik (a11y) iyileştirmeleri: ARIA attribute'ları, modal focus-trap/ESC, klavye navigasyonu (`MemberPicker`, `DrillModal`, drag-and-drop alanları)
 - [ ] i18n'i tam kapsama al (export dosyaları — PPTX/Excel başlık/etiketler, tüm hata mesajları)
 - [ ] Bildirim sistemi (yorum/mention, onay bekleyen görev — en azından in-app, sonra e-posta)
@@ -154,3 +154,12 @@
 - **İş kuralı (business rule) motoru:** Yeni `business_rules` tablosu (model_id, scope_filters JSON, op, value, severity: block/warn, message, active). `lib/business-rules.ts`: CRUD + `evaluateBusinessRules` (kapsam eşleşmesi için `workflow.ts` ile aynı `scopeMatchesCoord` yardımcısını — artık `lib/fact-filters.ts`'e taşınmış ortak bir fonksiyon — kullanır). `upsertFacts` her satır için hem lock hem business-rule kontrolü yapar: `block` şiddetindeki ihlal `BusinessRuleError` fırlatır (hiçbir şey yazılmaz), `warn` şiddetindekiler `UpsertFactsResult.warnings` içinde döner ve yazma işlemini durdurmaz. `/api/upload`, `/api/integrations/import`, `/api/scenario/copy` → `BusinessRuleError`'ı `400 business_rule_violated` olarak dönüyor ve `warnings` alanını response'a ekliyor. Kural yönetim UI'ı ayrı bir sayfa değil, `modeling/models/[id]/page.tsx` model detay sayfasına gömülü (CRUD + aktif/pasif toggle).
 - `lib/fact-filters.ts`'e ortak `scopeMatchesCoord`/`scopesOverlap` yardımcıları eklendi; `workflow.ts`'teki kilit kontrolü de bunları kullanacak şekilde refactor edildi (kod tekrarı önlendi).
 - 24 yeni birim test: `business-rules.test.ts` (10), `time-offset.test.ts` (8), `formula.test.ts`'e 15 yeni test (IF/SUM/AVG/MIN/MAX), `facts-write.test.ts`'e 6 yeni test (business-rule block/warn, fact_audit write/revert kayıtları) — toplam **100 test**. Gerçek `next dev` sunucusuna karşı manuel smoke testle doğrulandı: business-rule CRUD, scenario-copy → fact_audit kaydı → rollback tam döngüsü, ve bir `block` kuralının scenario-copy'yi `400` ile reddettiği (ilk denemede mesaj tekrarlıydı, `BusinessRuleError` kural-id'ye göre dedupe edilerek düzeltildi) doğrulandı; `/workflow`, `/scenarios`, `/admin/audit/cells`, `/modeling/models/[id]`, `/reports` sayfalarının hepsi 200 döndü.
+
+### Sprint 2.3 — Connector plugin mimarisi tamamlama notu (2026-06-10)
+
+- Yeni `connector_configs` tablosu (type, name, config JSON, active). `lib/connectors/types.ts`'e `ConnectorTypeDef` (configFields + `create(config)` fabrikası) eklendi; `sap-mock.ts`/`sap-odata.ts` artık hem geriye-dönük uyumlu statik tekil `Connector` örneğini (env değişkenlerinden, eski davranış) hem de `ConnectorTypeDef`'i export ediyor.
+- `lib/connector-configs.ts`: CRUD + `seedConnectorConfigsFromEnv()` — modül yüklendiğinde bir kez çalışır, hiç kayıt yoksa `SAP_ODATA_URL`/`SAP_USER`/`SAP_PASS` ortam değişkenleri tanımlıysa otomatik bir `sap-odata` config'i oluşturur (mevcut `.env.local` tabanlı kurulumlar yeni sisteme sorunsuz geçer), ayrıca her zaman bir `sap-mock` config'i ekler.
+- `lib/connectors/index.ts` artık statik `connectors[]`/`getConnector(id)` yerine `CONNECTOR_TYPES` (kod-seviyesi tür kaydı) + `listConnectorInstances()`/`getConnectorInstance(configId)` (DB'deki aktif config'lerden canlı `Connector` örnekleri üretir) sunuyor.
+- API: `/api/connector-configs` (liste — credential alanları maskeli döner, oluşturma), `/api/connector-configs/[id]` (güncelleme/silme/test), `/api/connector-configs/types` (UI'nin form alanlarını dinamik oluşturması için tür metadata'sı). Mevcut `/api/integrations`, `/api/integrations/preview`, `/api/integrations/import` route'ları `connectorId: string` yerine `connectorId: number` (config id) kullanacak şekilde güncellendi.
+- UI: Entegrasyonlar sayfasına (`integrations/page.tsx`) admin-only "Bağlantıları Yönet" paneli eklendi (bağlantı listesi + test et/aktif-pasif/sil + yeni bağlantı formu, seçilen türe göre dinamik alan listesi).
+- 12 yeni birim test (`connector-configs.test.ts`) — toplam **112 test**. `npm run lint`/`tsc`/`next build` temiz; gerçek `next dev` sunucusuna karşı manuel doğrulama yapıldı (connector listesi, config CRUD akışları render/API seviyesinde çalışıyor).

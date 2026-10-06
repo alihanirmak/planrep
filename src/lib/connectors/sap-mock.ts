@@ -1,7 +1,8 @@
-import type { Connector, ConnectorResult, ConnectorRow, ConnectorSource } from "./types";
+import type { Connector, ConnectorResult, ConnectorRow, ConnectorSource, ConnectorTypeDef } from "./types";
 
 // SAP Mock: gercek baglanti olmadan gelistirme/demo icin ornek SAP verisi.
-// Kolon adlari S/4HANA ACDOCA/CDS alan adlarini taklit eder.
+// Kolon adlari S/4HANA ACDOCA/CDS alan adlarini taklit eder. Konfigurasyon
+// gerektirmez (configFields: []) — her zaman baglanilabilir.
 const SOURCES: ConnectorSource[] = [
   {
     id: "C_GLACCOUNTBALANCE",
@@ -48,27 +49,41 @@ function generate(version: string, year: number): ConnectorRow[] {
   return rows;
 }
 
-export const sapMockConnector: Connector = {
-  id: "sap-mock",
-  name: "SAP S/4HANA (Mock)",
-  async test() {
-    return null; // her zaman baglanir
-  },
-  async listSources() {
-    return SOURCES;
-  },
-  async fetchRows(sourceId: string, top?: number): Promise<ConnectorResult> {
-    const rows =
-      sourceId === "C_GLACCOUNTBALANCE"
-        ? generate("ACTUAL", 2025)
-        : sourceId === "C_COSTCENTERPLAN"
-          ? generate("BUDGET", 2026)
-          : [];
-    const limited = top != null ? rows.slice(0, top) : rows;
-    return {
-      columns: rows.length > 0 ? Object.keys(rows[0]) : [],
-      rows: limited,
-      total: rows.length,
-    };
-  },
+function createSapMockConnector(): Connector {
+  return {
+    id: "sap-mock",
+    name: "SAP S/4HANA (Mock)",
+    async test() {
+      return null; // her zaman baglanir
+    },
+    async listSources() {
+      return SOURCES;
+    },
+    async fetchRows(sourceId: string, top?: number): Promise<ConnectorResult> {
+      const rows =
+        sourceId === "C_GLACCOUNTBALANCE"
+          ? generate("ACTUAL", 2025)
+          : sourceId === "C_COSTCENTERPLAN"
+            ? generate("BUDGET", 2026)
+            : [];
+      const limited = top != null ? rows.slice(0, top) : rows;
+      return {
+        columns: rows.length > 0 ? Object.keys(rows[0]) : [],
+        rows: limited,
+        total: rows.length,
+      };
+    },
+  };
+}
+
+export const sapMockConnectorType: ConnectorTypeDef = {
+  type: "sap-mock",
+  label: "SAP S/4HANA (Mock)",
+  description: "Gerçek bağlantı gerektirmeyen, demo/geliştirme amaçlı örnek SAP verisi.",
+  configFields: [],
+  create: () => createSapMockConnector(),
 };
+
+// Geriye donuk uyumluluk: eski statik tekil ornek (artik connector-configs
+// uzerinden dinamik olusturulan ornekler tercih edilmeli).
+export const sapMockConnector: Connector = createSapMockConnector();
