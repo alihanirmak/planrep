@@ -30,6 +30,9 @@ const tr = {
   "login.totpBack": "← E-posta/şifreyi değiştir",
   "login.totpError": "Kod geçersiz veya süresi dolmuş",
   "login.totpExpired": "Oturum süresi doldu, lütfen tekrar giriş yapın",
+  "login.orDivider": "veya",
+  "login.ssoButton": "ile giriş yap",
+  "login.ssoError": "SSO girişi başarısız oldu, lütfen tekrar deneyin",
   "home.welcome": "Hoş geldin",
   "home.subtitle": "Planlama ve raporlama çalışma alanına genel bakış",
   "home.models": "Model",
@@ -152,6 +155,8 @@ const tr = {
   "security.totpWrongPassword": "Şifre hatalı",
   "security.totpInvalidCode": "Kod geçersiz",
   "security.totpDone": "✅ İki adımlı doğrulama etkinleştirildi",
+  "security.ssoSection": "Tek Oturum Açma (SSO)",
+  "security.ssoActive": "Bu hesap {provider} ile giriş yapıyor",
 } as const;
 
 const en: Record<keyof typeof tr, string> = {
@@ -182,6 +187,9 @@ const en: Record<keyof typeof tr, string> = {
   "login.totpBack": "← Change email/password",
   "login.totpError": "Invalid or expired code",
   "login.totpExpired": "Session expired, please sign in again",
+  "login.orDivider": "or",
+  "login.ssoButton": "Sign in with",
+  "login.ssoError": "SSO sign-in failed, please try again",
   "home.welcome": "Welcome",
   "home.subtitle": "Overview of your planning and reporting workspace",
   "home.models": "Models",
@@ -304,6 +312,8 @@ const en: Record<keyof typeof tr, string> = {
   "security.totpWrongPassword": "Incorrect password",
   "security.totpInvalidCode": "Invalid code",
   "security.totpDone": "✅ Two-factor authentication enabled",
+  "security.ssoSection": "Single Sign-On (SSO)",
+  "security.ssoActive": "This account signs in with {provider}",
 };
 
 export type TKey = keyof typeof tr;

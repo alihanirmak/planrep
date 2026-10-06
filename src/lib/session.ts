@@ -105,3 +105,51 @@ export function preAuthCookieOptions() {
     maxAge: PREAUTH_MAX_AGE_SECONDS,
   };
 }
+
+// --- SSO (OIDC) akis-durumu tokeni ---
+//
+// Authorization Code + PKCE akisinda IdP'ye yonlendirmeden once uretilen
+// state/nonce/codeVerifier degerlerini, callback'e geri donulene kadar
+// SUNUCU TARAFINDA bir session store tutmadan (bu uygulamada sunucu
+// taraflı session store yok) saklamak icin imzali, kisa omurlu bir
+// cookie/token. state=CSRF/replay korumasi, nonce=ID token tazeligi,
+// codeVerifier=PKCE code_challenge'in karsiligi.
+export const SSO_STATE_COOKIE = "planrep_sso_state";
+const SSO_STATE_MAX_AGE_SECONDS = 5 * 60; // 5 dakika — IdP'de login suresi icin yeterli
+
+export type SsoFlowState = { state: string; nonce: string; codeVerifier: string };
+
+export async function createSsoStateToken(flow: SsoFlowState): Promise<string> {
+  return await new SignJWT({ purpose: "sso-flow", ...flow })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime(`${SSO_STATE_MAX_AGE_SECONDS}s`)
+    .sign(secret);
+}
+
+export async function verifySsoStateToken(token: string): Promise<SsoFlowState | null> {
+  try {
+    const { payload } = await jwtVerify(token, secret);
+    if (
+      payload.purpose !== "sso-flow" ||
+      typeof payload.state !== "string" ||
+      typeof payload.nonce !== "string" ||
+      typeof payload.codeVerifier !== "string"
+    ) {
+      return null;
+    }
+    return { state: payload.state, nonce: payload.nonce, codeVerifier: payload.codeVerifier };
+  } catch {
+    return null;
+  }
+}
+
+export function ssoStateCookieOptions() {
+  return {
+    httpOnly: true,
+    sameSite: "lax" as const,
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: SSO_STATE_MAX_AGE_SECONDS,
+  };
+}

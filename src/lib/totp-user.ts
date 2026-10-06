@@ -6,14 +6,21 @@ import { db, sqlite, users } from "./db";
 import { hashPassword, checkPassword } from "./auth";
 import { generateTotpSecret, generateBackupCodes, verifyTotp } from "./totp";
 
-export type TotpStatus = { enabled: boolean; pendingSetup: boolean };
+export type TotpStatus = {
+  enabled: boolean;
+  pendingSetup: boolean;
+  authProvider: "local" | "sso";
+  ssoProvider: string | null;
+};
 
 export function getTotpStatus(userId: number): TotpStatus {
   const user = db.select().from(users).where(eq(users.id, userId)).get();
-  if (!user) return { enabled: false, pendingSetup: false };
+  if (!user) return { enabled: false, pendingSetup: false, authProvider: "local", ssoProvider: null };
   return {
     enabled: !!user.totpEnabled,
     pendingSetup: !user.totpEnabled && !!user.totpSecret,
+    authProvider: user.authProvider,
+    ssoProvider: user.ssoProvider,
   };
 }
 

@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getT } from "@/lib/i18n";
+
+type SsoStatus = { enabled: boolean; providerLabel?: string };
 
 function LoginForm() {
   const router = useRouter();
@@ -11,9 +13,19 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [totpCode, setTotpCode] = useState("");
   const [step, setStep] = useState<"credentials" | "totp">("credentials");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(() =>
+    searchParams.get("sso_error") ? getT("tr")("login.ssoError") : null
+  );
   const [busy, setBusy] = useState(false);
+  const [sso, setSso] = useState<SsoStatus | null>(null);
   const t = getT("tr");
+
+  useEffect(() => {
+    fetch("/api/auth/sso/status")
+      .then((r) => (r.ok ? r.json() : { enabled: false }))
+      .then(setSso)
+      .catch(() => setSso({ enabled: false }));
+  }, []);
 
   async function submitCredentials(e: React.FormEvent) {
     e.preventDefault();
@@ -108,6 +120,21 @@ function LoginForm() {
             >
               {busy ? t("common.loading") : t("login.submit")}
             </button>
+            {sso?.enabled && (
+              <>
+                <div className="flex items-center gap-2 text-xs text-slate-400">
+                  <div className="h-px flex-1 bg-slate-200" />
+                  {t("login.orDivider")}
+                  <div className="h-px flex-1 bg-slate-200" />
+                </div>
+                <a
+                  href="/api/auth/sso/login"
+                  className="flex w-full items-center justify-center rounded-lg border border-slate-300 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  {`${t("login.ssoButton")} ${sso.providerLabel ?? ""}`.trim()}
+                </a>
+              </>
+            )}
           </form>
         ) : (
           <form onSubmit={submitTotp} className="space-y-4">

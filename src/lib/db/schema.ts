@@ -26,6 +26,19 @@ export const users = sqliteTable("users", {
   totpSecret: text("totp_secret"),
   totpEnabled: integer("totp_enabled").notNull().default(0),
   totpBackupCodes: text("totp_backup_codes"),
+  // SSO (OIDC — Okta/Azure AD vb.): ssoProvider+ssoSubject ilk SSO
+  // girisinde doldurulur ("provisioning"). Ayni email'e sahip var olan
+  // bir yerel kullanici varsa yeni kayit acilmaz, mevcut kullaniciya
+  // SSO kimligi BAGLANIR (bkz. lib/sso/sso-user.ts). SSO ile otomatik
+  // olusturulan kullanicilarin passwordHash'i rastgele/bilinmeyen bir
+  // deger olur (sifreyle giris fiilen imkansiz hale gelir), authProvider
+  // sadece bilgilendirme/denetim amaclidir, giris yontemini KISITLAMAZ
+  // (bir admin isterse SSO kullanicisina sonradan sifre atayabilir).
+  ssoProvider: text("sso_provider"),
+  ssoSubject: text("sso_subject"),
+  authProvider: text("auth_provider", { enum: ["local", "sso"] })
+    .notNull()
+    .default("local"),
 });
 
 export const dimensions = sqliteTable("dimensions", {

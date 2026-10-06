@@ -19,6 +19,13 @@ services:
       # Actions scheduled workflow) bu ucu "X-Cron-Secret: $CRON_SECRET"
       # header'iyla periyodik olarak cagirmalidir; bkz. docs/ROADMAP.md.
       CRON_SECRET: ${CRON_SECRET:-}
+      # SSO (OIDC). Hepsi bos ise login sayfasinda SSO butonu gosterilmez.
+      OIDC_ISSUER: ${OIDC_ISSUER:-}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      OIDC_REDIRECT_URI: ${OIDC_REDIRECT_URI:-}
+      SSO_DEFAULT_ROLE: ${SSO_DEFAULT_ROLE:-viewer}
+      SSO_PROVIDER_LABEL: ${SSO_PROVIDER_LABEL:-}
     volumes:
       - planrep-data:/app/data
     restart: unless-stopped

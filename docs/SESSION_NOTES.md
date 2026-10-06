@@ -32,9 +32,14 @@
 
 ## Sıradaki adım
 
-- 2FA/TOTP çalışması (11 değişen + 7 yeni dosya, `docs/` dahil) henüz
-  commit edilmedi — kullanıcıdan commit onayı istenecek, sonra Sprint 3.1
-  madde 2 (SSO) için onay istenecek.
+- 2FA/TOTP commit edildi ve push edildi (`c76aeda`, origin/main güncel).
+- Sprint 3.1 madde 2 (SSO/OIDC) bu oturumda implemente edildi: `lib/sso/*`
+  (config/pkce/oidc-client/sso-user), `/api/auth/sso/{login,callback,status}`,
+  `users` tablosuna sso_provider/sso_subject/auth_provider, login+security
+  UI, i18n, `.env.example`/`docker-compose.yml`. 29 yeni test — toplam
+  **210 test**, hepsi geçiyor. Lint/typecheck/build temiz. **Henüz commit
+  edilmedi** — kullanıcı onayı bekleniyor, sonra Sprint 3.1 madde 3
+  (çoklu-tenant) için onay istenecek.
 
 ---
 

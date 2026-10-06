@@ -3,7 +3,13 @@
 import { useEffect, useState } from "react";
 import { getT, readLocaleClient, formatT } from "@/lib/i18n";
 
-type Status = { enabled: boolean; pendingSetup: boolean; remainingBackupCodes: number };
+type Status = {
+  enabled: boolean;
+  pendingSetup: boolean;
+  remainingBackupCodes: number;
+  authProvider: "local" | "sso";
+  ssoProvider: string | null;
+};
 
 export default function AccountSecurityPage() {
   const t = getT(readLocaleClient());
@@ -87,6 +93,12 @@ export default function AccountSecurityPage() {
   return (
     <div>
       <h1 className="text-2xl font-bold text-slate-800">{t("security.title")}</h1>
+
+      {status?.authProvider === "sso" && (
+        <div className="mt-6 max-w-xl rounded-xl bg-blue-50 p-4 text-sm text-blue-800">
+          {formatT(t("security.ssoActive"), { provider: status.ssoProvider ?? "SSO" })}
+        </div>
+      )}
 
       <div className="mt-6 max-w-xl rounded-xl bg-white p-5 shadow-sm">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
