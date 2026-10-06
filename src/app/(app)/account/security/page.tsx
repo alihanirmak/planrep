@@ -11,6 +11,15 @@ type Status = {
   ssoProvider: string | null;
 };
 
+type ApiKey = {
+  id: number;
+  name: string;
+  keyPrefix: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+  revokedAt: string | null;
+};
+
 export default function AccountSecurityPage() {
   const t = getT(readLocaleClient());
   const [status, setStatus] = useState<Status | null>(null);
@@ -22,6 +31,41 @@ export default function AccountSecurityPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  const [apiKeys, setApiKeys] = useState<ApiKey[] | null>(null);
+  const [newKeyName, setNewKeyName] = useState("");
+  const [createdKey, setCreatedKey] = useState<string | null>(null);
+  const [apiKeyMsg, setApiKeyMsg] = useState<string | null>(null);
+
+  function loadApiKeys() {
+    fetch("/api/api-keys")
+      .then((r) => (r.ok ? r.json() : []))
+      .then(setApiKeys);
+  }
+
+  async function createKey(e: React.FormEvent) {
+    e.preventDefault();
+    setApiKeyMsg(null);
+    const res = await fetch("/api/api-keys", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newKeyName }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (res.ok) {
+      setCreatedKey(body.rawKey);
+      setNewKeyName("");
+      loadApiKeys();
+    } else {
+      setApiKeyMsg(t("common.error"));
+    }
+  }
+
+  async function revokeKey(id: number) {
+    if (!confirm(t("apiKeys.confirmRevoke"))) return;
+    await fetch(`/api/api-keys/${id}`, { method: "DELETE" });
+    loadApiKeys();
+  }
+
   function loadStatus() {
     fetch("/api/auth/totp/status")
       .then((r) => (r.ok ? r.json() : null))
@@ -30,6 +74,7 @@ export default function AccountSecurityPage() {
 
   useEffect(() => {
     loadStatus();
+    loadApiKeys();
   }, []);
 
   async function startSetup() {
@@ -219,6 +264,84 @@ export default function AccountSecurityPage() {
         )}
 
         {msg && <div className="mt-3 text-sm text-red-600">{msg}</div>}
+      </div>
+
+      <div className="mt-6 max-w-xl rounded-xl bg-white p-5 shadow-sm">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
+          {t("apiKeys.title")}
+        </h2>
+        <p className="mt-2 text-sm text-slate-500">{t("apiKeys.intro")}</p>
+
+        {createdKey ? (
+          <div className="mt-4">
+            <div className="rounded-lg bg-green-50 px-4 py-3 text-sm text-green-800">
+              {t("apiKeys.createdOnce")}
+            </div>
+            <div className="mt-2 break-all rounded-lg bg-slate-50 p-4 font-mono text-sm text-slate-800">
+              {createdKey}
+            </div>
+            <button
+              onClick={() => setCreatedKey(null)}
+              className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            >
+              {t("common.save")}
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={createKey} className="mt-3 flex flex-wrap items-end gap-3">
+            <label className="flex flex-col text-xs text-slate-500">
+              {t("apiKeys.nameLabel")}
+              <input
+                required
+                value={newKeyName}
+                onChange={(e) => setNewKeyName(e.target.value)}
+                placeholder="Power BI"
+                className="mt-1 w-56 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
+              />
+            </label>
+            <button
+              type="submit"
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            >
+              {t("apiKeys.create")}
+            </button>
+          </form>
+        )}
+        {apiKeyMsg && <div className="mt-3 text-sm text-red-600">{apiKeyMsg}</div>}
+
+        <div className="mt-4 divide-y divide-slate-100">
+          {apiKeys == null ? (
+            <p className="py-2 text-sm text-slate-400">{t("common.loading")}</p>
+          ) : apiKeys.length === 0 ? (
+            <p className="py-2 text-sm text-slate-400">{t("apiKeys.empty")}</p>
+          ) : (
+            apiKeys.map((k) => (
+              <div key={k.id} className="flex items-center justify-between gap-3 py-2">
+                <div>
+                  <div className="text-sm font-medium text-slate-800">
+                    {k.name}{" "}
+                    <span className="font-mono text-xs text-slate-400">{k.keyPrefix}…</span>
+                  </div>
+                  <div className="text-xs text-slate-400">
+                    {k.revokedAt
+                      ? t("apiKeys.revoked")
+                      : k.lastUsedAt
+                        ? formatT(t("apiKeys.lastUsed"), { date: new Date(k.lastUsedAt).toLocaleString() })
+                        : t("apiKeys.neverUsed")}
+                  </div>
+                </div>
+                {!k.revokedAt && (
+                  <button
+                    onClick={() => revokeKey(k.id)}
+                    className="rounded-lg bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100"
+                  >
+                    {t("apiKeys.revoke")}
+                  </button>
+                )}
+              </div>
+            ))
+          )}
+        </div>
       </div>
     </div>
   );

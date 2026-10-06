@@ -173,6 +173,17 @@ const tr = {
   "security.totpDone": "✅ İki adımlı doğrulama etkinleştirildi",
   "security.ssoSection": "Tek Oturum Açma (SSO)",
   "security.ssoActive": "Bu hesap {provider} ile giriş yapıyor",
+  "apiKeys.title": "API Anahtarları (BI Entegrasyonu)",
+  "apiKeys.intro": "Power BI, Tableau gibi harici araçların verilerinize REST/OData uçlarından erişebilmesi için bir anahtar oluşturun.",
+  "apiKeys.nameLabel": "Anahtar Adı",
+  "apiKeys.create": "Anahtar Oluştur",
+  "apiKeys.createdOnce": "✅ Anahtar oluşturuldu — bu değeri şimdi kopyalayın, bir daha gösterilmeyecek.",
+  "apiKeys.empty": "Henüz anahtar yok",
+  "apiKeys.revoke": "İptal Et",
+  "apiKeys.revoked": "İptal edildi",
+  "apiKeys.lastUsed": "Son kullanım: {date}",
+  "apiKeys.neverUsed": "Henüz kullanılmadı",
+  "apiKeys.confirmRevoke": "Bu anahtar iptal edilsin mi? Bu anahtarı kullanan tüm entegrasyonlar erişimi kaybeder.",
 } as const;
 
 const en: Record<keyof typeof tr, string> = {
@@ -346,6 +357,17 @@ const en: Record<keyof typeof tr, string> = {
   "security.totpDone": "✅ Two-factor authentication enabled",
   "security.ssoSection": "Single Sign-On (SSO)",
   "security.ssoActive": "This account signs in with {provider}",
+  "apiKeys.title": "API Keys (BI Integration)",
+  "apiKeys.intro": "Create a key so external tools like Power BI or Tableau can access your data via the REST/OData endpoints.",
+  "apiKeys.nameLabel": "Key Name",
+  "apiKeys.create": "Create Key",
+  "apiKeys.createdOnce": "✅ Key created — copy this value now, it won't be shown again.",
+  "apiKeys.empty": "No keys yet",
+  "apiKeys.revoke": "Revoke",
+  "apiKeys.revoked": "Revoked",
+  "apiKeys.lastUsed": "Last used: {date}",
+  "apiKeys.neverUsed": "Never used",
+  "apiKeys.confirmRevoke": "Revoke this key? Any integration using it will lose access.",
 };
 
 export type TKey = keyof typeof tr;

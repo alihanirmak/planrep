@@ -14,6 +14,32 @@ export const tenants = sqliteTable("tenants", {
   createdAt: text("created_at").notNull(),
 });
 
+// Harici BI araclari (Power BI/Tableau vb.) icin REST export API'sine
+// erisim anahtarlari (bkz. lib/api-keys.ts, app/api/v1/*). Sifre gibi
+// bcrypt YERINE sha256 ile hashlenir — API key'ler zaten yuksek entropili
+// rastgele degerler oldugundan (32 bayt), kasitli olarak yavaslatilmis bir
+// hash fonksiyonuna gerek yok; sha256 hash'i UNIQUE INDEX ile direkt
+// DB lookup'u mumkun kilar (bcrypt ile bu mumkun olmazdi — her denemede
+// tum anahtarlari teker teker compare etmek gerekirdi).
+export const apiKeys = sqliteTable(
+  "api_keys",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    tenantId: integer("tenant_id").notNull(),
+    userId: integer("user_id").notNull(),
+    name: text("name").notNull(),
+    keyHash: text("key_hash").notNull(),
+    // Anahtarin ilk 8 karakteri (prefix) — kullaniciya listede "hangi
+    // anahtar bu" diye hatirlatmak icin gosterilir, ham anahtar bir daha
+    // GORUNTULENEMEZ (sadece olusturma aninda bir kez verilir).
+    keyPrefix: text("key_prefix").notNull(),
+    createdAt: text("created_at").notNull(),
+    lastUsedAt: text("last_used_at"),
+    revokedAt: text("revoked_at"),
+  },
+  (t) => [uniqueIndex("uq_api_keys_hash").on(t.keyHash)]
+);
+
 export const users = sqliteTable("users", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   // Coklu-tenant: her kullanici TAM OLARAK bir tenant'a aittir. email halen

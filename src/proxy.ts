@@ -6,13 +6,17 @@ import { rateLimit, clientIp } from "@/lib/rate-limit";
 // de public olmali — oturumsuz bir kullanici SSO ile giris yapmaya veya yeni
 // bir tenant olusturmaya calisiyor olabilir. Oncesinde "/api/auth/sso/*"
 // burada eksikti (SSO girisi fiilen hic calismiyordu — middleware once
-// 401 donuyordu); bu oturumda duzeltildi.
+// 401 donuyordu); bu oturumda duzeltildi. "/api/v1" (REST export API,
+// Power BI/Tableau icin) de public listede — SESSION_COOKIE DEGIL kendi
+// Authorization: Bearer <api-key> basligini kullanir (bkz. lib/api-auth.ts),
+// kimlik dogrulama middleware'de degil route'un kendisinde yapilir.
 const PUBLIC_PATHS = [
   "/login",
   "/signup",
   "/api/auth/login",
   "/api/auth/signup",
   "/api/auth/sso",
+  "/api/v1",
 ];
 
 // Kaba taneli, bellek-ici rate limit kurallari: brute-force (login) ve
@@ -46,6 +50,12 @@ const RATE_LIMIT_RULES: Array<{
     test: (p, m) => m === "POST" && p === "/api/auth/signup",
     limit: 5,
     windowMs: 15 * 60 * 1000,
+  },
+  {
+    name: "odata",
+    test: (p) => p.startsWith("/api/v1/odata"),
+    limit: 120,
+    windowMs: 5 * 60 * 1000,
   },
 ];
 

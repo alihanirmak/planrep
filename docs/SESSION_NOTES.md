@@ -111,6 +111,23 @@
 - Sprint 3.2'nin TÜMÜ (virtualized grid + Redis caching + real-time
   collaboration) artık tamamlandı. Sıradaki: Sprint 3.3 madde 1 (BI
   export API) için onay istenecek.
+- Real-time collaboration commit edildi ve push edildi (`c39527a`,
+  origin/main güncel).
+- Sprint 3.3 madde 1 (BI export API) bu oturumda implemente edildi.
+  **Mimari karar: pragmatik OData alt kümesi, tam OData v4 protokolü
+  DEĞİL** (EDMX XML/$expand/batch yok) — Power BI/Tableau'nun REST/Web
+  bağlayıcıları düz JSON ile de çalışır. `api_keys` tablosu + `lib/
+  api-keys.ts` (ham anahtar sadece oluşturma anında bir kez döner, sha256
+  hash saklanır) + `lib/api-auth.ts` (Bearer token doğrulama) + `/api/v1/
+  odata/{route,metadata,[modelCode]}` + `lib/odata.ts` ($top/$skip/
+  $filter parse). `proxy.ts` `PUBLIC_PATHS`'e `/api/v1` eklendi (kendi
+  auth mekanizması var). Self-service anahtar yönetimi `/api/api-keys` +
+  `account/security` sayfasına UI. `next dev`'e karşı uçtan uca manuel
+  doğrulama: anahtar oluştur → servis belgesi → metadata → veri (sayfalı)
+  → auth'suz 401 → iptal → iptal sonrası 401, hepsi beklendiği gibi.
+  21 yeni test — toplam **266 test**. Lint/typecheck/build temiz.
+  **Henüz commit edilmedi** — kullanıcı onayı bekleniyor, sonra Sprint
+  3.3 madde 2 (mobil/PWA) için onay istenecek.
 
 ---
 
