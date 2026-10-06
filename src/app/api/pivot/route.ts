@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { sqlite } from "@/lib/db";
-import { getModelDims, rootMembers } from "@/lib/model";
+import { getModelDims, getModelTenantId, rootMembers } from "@/lib/model";
 import { allowedSets } from "@/lib/access";
 import { buildFactWhereVariants, sumGroupedRows, MAX_AGGREGATE_RESULT_ROWS } from "@/lib/fact-filters";
 import { formatT } from "@/lib/i18n";
@@ -26,6 +26,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
   }
   const { modelId, rows, cols, filters, page, pageSize } = parsed.data;
+  if (getModelTenantId(modelId) !== session.tenantId) {
+    return NextResponse.json({ error: "model_not_found" }, { status: 404 });
+  }
 
   const dims = getModelDims(modelId);
   const axis = [...rows, ...cols];

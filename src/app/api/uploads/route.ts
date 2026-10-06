@@ -15,10 +15,10 @@ export async function GET(req: Request) {
               usr.name AS userName, m.name AS modelName
        FROM uploads u
        LEFT JOIN users usr ON usr.id = u.user_id
-       LEFT JOIN models m ON m.id = u.model_id
-       ${Number.isNaN(modelId) ? "" : "WHERE u.model_id = ?"}
+       JOIN models m ON m.id = u.model_id
+       WHERE m.tenant_id = ?${Number.isNaN(modelId) ? "" : " AND u.model_id = ?"}
        ORDER BY u.id DESC LIMIT 100`
     )
-    .all(...(Number.isNaN(modelId) ? [] : [modelId]));
+    .all(...(Number.isNaN(modelId) ? [session.tenantId] : [session.tenantId, modelId]));
   return NextResponse.json(rows);
 }

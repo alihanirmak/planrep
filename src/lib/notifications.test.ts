@@ -113,24 +113,24 @@ describe("markNotificationRead / markAllNotificationsRead", () => {
 
 describe("resolveMentionedUserIds", () => {
   it("isim bazli mention'i (bosluksuz, kucuk harf) cozer", () => {
-    expect(notif.resolveMentionedUserIds("Merhaba @aliceyılmaz, bakar mısın?")).toEqual([aliceId]);
+    expect(notif.resolveMentionedUserIds("Merhaba @aliceyılmaz, bakar mısın?", 1)).toEqual([aliceId]);
   });
 
   it("e-posta local-part bazli mention'i cozer", () => {
-    expect(notif.resolveMentionedUserIds("cc @bob lütfen")).toEqual([bobId]);
+    expect(notif.resolveMentionedUserIds("cc @bob lütfen", 1)).toEqual([bobId]);
   });
 
   it("birden fazla mention'i cozer ve tekillestirir", () => {
-    const ids = notif.resolveMentionedUserIds("@bob ve @aliceyılmaz ve tekrar @bob");
+    const ids = notif.resolveMentionedUserIds("@bob ve @aliceyılmaz ve tekrar @bob", 1);
     expect(new Set(ids)).toEqual(new Set([aliceId, bobId]));
   });
 
   it("eslesmeyen mention icin bos liste doner", () => {
-    expect(notif.resolveMentionedUserIds("@olmayankullanici")).toEqual([]);
+    expect(notif.resolveMentionedUserIds("@olmayankullanici", 1)).toEqual([]);
   });
 
   it("hic @ yoksa bos liste doner", () => {
-    expect(notif.resolveMentionedUserIds("sade bir yorum metni")).toEqual([]);
+    expect(notif.resolveMentionedUserIds("sade bir yorum metni", 1)).toEqual([]);
   });
 });
 

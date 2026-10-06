@@ -41,7 +41,7 @@ describe("seedConnectorConfigsFromEnv (module load side-effect)", () => {
 
 describe("createConnectorConfig / getConnectorConfig / listConnectorConfigs", () => {
   it("yeni bir sap-odata config'i olusturup geri okunabilir", () => {
-    const cfg = cc.createConnectorConfig({
+    const cfg = cc.createConnectorConfig({ tenantId: 1,
       type: "sap-odata",
       name: "Test SAP",
       config: { url: "https://example.com", user: "u", pass: "p", entities: "E1,E2" },
@@ -51,7 +51,7 @@ describe("createConnectorConfig / getConnectorConfig / listConnectorConfigs", ()
   });
 
   it("activeOnly filtresi sadece aktif kayitlari dondurur", () => {
-    const cfg = cc.createConnectorConfig({ type: "sap-mock", name: "Pasif Test", config: {} });
+    const cfg = cc.createConnectorConfig({ tenantId: 1, type: "sap-mock", name: "Pasif Test", config: {} });
     cc.updateConnectorConfig(cfg.id, { active: false });
     const active = cc.listConnectorConfigs({ activeOnly: true });
     expect(active.find((c) => c.id === cfg.id)).toBeUndefined();
@@ -62,7 +62,7 @@ describe("createConnectorConfig / getConnectorConfig / listConnectorConfigs", ()
 
 describe("updateConnectorConfig / deleteConnectorConfig", () => {
   it("name ve config kismi guncellenebilir", () => {
-    const cfg = cc.createConnectorConfig({
+    const cfg = cc.createConnectorConfig({ tenantId: 1,
       type: "sap-odata",
       name: "Guncellenecek",
       config: { url: "https://old.example.com", user: "u", pass: "p", entities: "" },
@@ -77,7 +77,7 @@ describe("updateConnectorConfig / deleteConnectorConfig", () => {
   });
 
   it("deleteConnectorConfig kaydi siler", () => {
-    const cfg = cc.createConnectorConfig({ type: "sap-mock", name: "Silinecek", config: {} });
+    const cfg = cc.createConnectorConfig({ tenantId: 1, type: "sap-mock", name: "Silinecek", config: {} });
     cc.deleteConnectorConfig(cfg.id);
     expect(cc.getConnectorConfig(cfg.id)).toBeNull();
   });
@@ -85,48 +85,48 @@ describe("updateConnectorConfig / deleteConnectorConfig", () => {
 
 describe("lib/connectors — dinamik Connector uretimi", () => {
   it("listConnectorInstances aktif config'lerden canli Connector uretir", () => {
-    const instances = connectors.listConnectorInstances();
+    const instances = connectors.listConnectorInstances(1);
     expect(instances.length).toBeGreaterThan(0);
     expect(instances.every((i) => typeof i.connector.fetchRows === "function")).toBe(true);
   });
 
   it("getConnectorInstance belirli bir config id'si icin dogru turden Connector doner", () => {
-    const cfg = cc.createConnectorConfig({
+    const cfg = cc.createConnectorConfig({ tenantId: 1,
       type: "sap-odata",
       name: "Instance Test",
       config: { url: "https://example.com", user: "u", pass: "p", entities: "E1" },
     });
-    const inst = connectors.getConnectorInstance(cfg.id);
+    const inst = connectors.getConnectorInstance(cfg.id, 1);
     expect(inst).not.toBeNull();
     expect(inst?.connector.id).toBe("sap-odata");
     expect(inst?.name).toBe("Instance Test");
   });
 
   it("pasif config icin getConnectorInstance null doner", () => {
-    const cfg = cc.createConnectorConfig({ type: "sap-mock", name: "Pasif Instance", config: {} });
+    const cfg = cc.createConnectorConfig({ tenantId: 1, type: "sap-mock", name: "Pasif Instance", config: {} });
     cc.updateConnectorConfig(cfg.id, { active: false });
-    expect(connectors.getConnectorInstance(cfg.id)).toBeNull();
+    expect(connectors.getConnectorInstance(cfg.id, 1)).toBeNull();
   });
 
   it("var olmayan config id'si icin getConnectorInstance null doner", () => {
-    expect(connectors.getConnectorInstance(999999)).toBeNull();
+    expect(connectors.getConnectorInstance(999999, 1)).toBeNull();
   });
 
   it("sap-mock connector her zaman baglanir ve kaynak dondurur", async () => {
     const cfg = cc.listConnectorConfigs().find((c) => c.type === "sap-mock")!;
-    const inst = connectors.getConnectorInstance(cfg.id)!;
+    const inst = connectors.getConnectorInstance(cfg.id, 1)!;
     expect(await inst.connector.test()).toBeNull();
     const sources = await inst.connector.listSources();
     expect(sources.length).toBeGreaterThan(0);
   });
 
   it("sap-odata connector eksik config ile anlamli hata mesaji doner (test())", async () => {
-    const cfg = cc.createConnectorConfig({
+    const cfg = cc.createConnectorConfig({ tenantId: 1,
       type: "sap-odata",
       name: "Eksik Config",
       config: {},
     });
-    const inst = connectors.getConnectorInstance(cfg.id)!;
+    const inst = connectors.getConnectorInstance(cfg.id, 1)!;
     const status = await inst.connector.test();
     expect(status).toMatch(/URL/i);
   });

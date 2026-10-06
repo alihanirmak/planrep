@@ -135,6 +135,12 @@ function LoginForm() {
                 </a>
               </>
             )}
+            <a
+              href="/signup"
+              className="block w-full text-center text-xs text-slate-400 hover:text-slate-600"
+            >
+              {t("login.signupLink")}
+            </a>
           </form>
         ) : (
           <form onSubmit={submitTotp} className="space-y-4">

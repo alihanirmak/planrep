@@ -25,10 +25,10 @@ export type ModelInfo = {
   dims: DimInfo[];
 };
 
-export function getModels(): ModelInfo[] {
+export function getModels(tenantId: number): ModelInfo[] {
   const models = sqlite
-    .prepare("SELECT id, code, name, description FROM models ORDER BY id")
-    .all() as Array<{ id: number; code: string; name: string; description: string | null }>;
+    .prepare("SELECT id, code, name, description FROM models WHERE tenant_id = ? ORDER BY id")
+    .all(tenantId) as Array<{ id: number; code: string; name: string; description: string | null }>;
   if (models.length === 0) return [];
 
   const modelIds = models.map((m) => m.id);
@@ -84,6 +84,26 @@ export function getModelDims(modelId: number): DimInfo[] {
   if (dims.length === 0) return [];
   const membersByDim = fetchMembersByDimension(dims.map((d) => d.id));
   return dims.map((d) => ({ ...d, members: membersByDim.get(d.id) ?? [] }));
+}
+
+// Coklu-tenant: raw modelId/dimensionId ile gelen her istekte, kaynagin
+// GERCEKTEN cagiranin tenant'ina ait olup olmadigi kontrol edilmeli —
+// bu iki yardimci, route'larin "model_dimensions" vb. alt tablolar
+// uzerinden dolayli sorgu yapmadan ONCE tek bir hizli kontrol yapmasini
+// saglar. 404 donulmesi (403 degil) kasitlidir: baska bir tenant'a ait
+// bir kaynagin VAR OLDUGUNU bile sizdirmemek icin.
+export function getModelTenantId(modelId: number): number | null {
+  const row = sqlite.prepare("SELECT tenant_id AS tenantId FROM models WHERE id = ?").get(modelId) as
+    | { tenantId: number }
+    | undefined;
+  return row?.tenantId ?? null;
+}
+
+export function getDimensionTenantId(dimensionId: number): number | null {
+  const row = sqlite
+    .prepare("SELECT tenant_id AS tenantId FROM dimensions WHERE id = ?")
+    .get(dimensionId) as { tenantId: number } | undefined;
+  return row?.tenantId ?? null;
 }
 
 // Secilen uye kodlari + tum alt uyelerinin kodlari

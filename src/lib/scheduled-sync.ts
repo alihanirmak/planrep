@@ -3,6 +3,7 @@ import { runConnectorImport } from "./integrations/run-import";
 
 export type ScheduledSync = {
   id: number;
+  tenantId: number;
   name: string;
   connectorConfigId: number;
   source: string;
@@ -21,6 +22,7 @@ export type ScheduledSync = {
 
 type Row = {
   id: number;
+  tenant_id: number;
   name: string;
   connector_config_id: number;
   source: string;
@@ -40,6 +42,7 @@ type Row = {
 function mapRow(r: Row): ScheduledSync {
   return {
     id: r.id,
+    tenantId: r.tenant_id,
     name: r.name,
     connectorConfigId: r.connector_config_id,
     source: r.source,
@@ -57,7 +60,13 @@ function mapRow(r: Row): ScheduledSync {
   };
 }
 
-export function listScheduledSyncs(): ScheduledSync[] {
+export function listScheduledSyncs(filter?: { tenantId?: number }): ScheduledSync[] {
+  if (filter?.tenantId != null) {
+    const rows = sqlite
+      .prepare("SELECT * FROM scheduled_syncs WHERE tenant_id = ? ORDER BY id DESC")
+      .all(filter.tenantId) as Row[];
+    return rows.map(mapRow);
+  }
   const rows = sqlite.prepare("SELECT * FROM scheduled_syncs ORDER BY id DESC").all() as Row[];
   return rows.map(mapRow);
 }
@@ -68,6 +77,7 @@ export function getScheduledSync(id: number): ScheduledSync | null {
 }
 
 export function createScheduledSync(input: {
+  tenantId: number;
   name: string;
   connectorConfigId: number;
   source: string;
@@ -81,10 +91,11 @@ export function createScheduledSync(input: {
     sqlite
       .prepare(
         `INSERT INTO scheduled_syncs
-           (name, connector_config_id, source, model_id, mapping, interval_minutes, active, created_by, created_at, updated_at)
-         VALUES (?,?,?,?,?,?,1,?,?,?)`
+           (tenant_id, name, connector_config_id, source, model_id, mapping, interval_minutes, active, created_by, created_at, updated_at)
+         VALUES (?,?,?,?,?,?,?,1,?,?,?)`
       )
       .run(
+        input.tenantId,
         input.name,
         input.connectorConfigId,
         input.source,
@@ -171,6 +182,7 @@ export async function runScheduledSync(id: number): Promise<ScheduledSyncRunOutc
     throw new Error(`Zamanlanmış senkronizasyon bulunamadı: ${id}`);
   }
   const result = await runConnectorImport({
+    tenantId: sync.tenantId,
     connectorConfigId: sync.connectorConfigId,
     source: sync.source,
     modelId: sync.modelId,

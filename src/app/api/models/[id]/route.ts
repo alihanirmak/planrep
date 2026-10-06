@@ -12,8 +12,10 @@ export async function GET(
   const id = Number((await params).id);
 
   const model = sqlite
-    .prepare("SELECT id, code, name, description, created_at AS createdAt FROM models WHERE id = ?")
-    .get(id);
+    .prepare(
+      "SELECT id, code, name, description, created_at AS createdAt FROM models WHERE id = ? AND tenant_id = ?"
+    )
+    .get(id, session.tenantId);
   if (!model) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
   const dims = sqlite
@@ -54,9 +56,9 @@ export async function DELETE(
   }
 
   const id = Number((await params).id);
-  const model = sqlite.prepare("SELECT code, name FROM models WHERE id = ?").get(id) as
-    | { code: string; name: string }
-    | undefined;
+  const model = sqlite
+    .prepare("SELECT code, name FROM models WHERE id = ? AND tenant_id = ?")
+    .get(id, session.tenantId) as { code: string; name: string } | undefined;
   if (!model) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
   const tx = sqlite.transaction(() => {

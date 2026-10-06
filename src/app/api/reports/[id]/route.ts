@@ -13,8 +13,8 @@ type ReportRow = {
   shared: number;
 };
 
-function getReport(id: number): ReportRow | undefined {
-  return sqlite.prepare("SELECT * FROM reports WHERE id = ?").get(id) as
+function getReport(id: number, tenantId: number): ReportRow | undefined {
+  return sqlite.prepare("SELECT * FROM reports WHERE id = ? AND tenant_id = ?").get(id, tenantId) as
     | ReportRow
     | undefined;
 }
@@ -26,7 +26,7 @@ export async function GET(
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const id = Number((await params).id);
-  const r = getReport(id);
+  const r = getReport(id, session.tenantId);
   if (!r) return NextResponse.json({ error: "not_found" }, { status: 404 });
   if (r.owner_id !== session.id && r.shared !== 1) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
@@ -55,7 +55,7 @@ export async function PUT(
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const id = Number((await params).id);
-  const r = getReport(id);
+  const r = getReport(id, session.tenantId);
   if (!r) return NextResponse.json({ error: "not_found" }, { status: 404 });
   if (r.owner_id !== session.id) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
@@ -92,7 +92,7 @@ export async function DELETE(
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const id = Number((await params).id);
-  const r = getReport(id);
+  const r = getReport(id, session.tenantId);
   if (!r) return NextResponse.json({ error: "not_found" }, { status: 404 });
   if (r.owner_id !== session.id) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });

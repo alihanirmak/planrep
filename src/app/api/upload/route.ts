@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import ExcelJS from "exceljs";
 import { getSession } from "@/lib/auth";
 import { sqlite } from "@/lib/db";
-import { getModelDims } from "@/lib/model";
+import { getModelDims, getModelTenantId } from "@/lib/model";
 import { allowedSets } from "@/lib/access";
 import { upsertFacts } from "@/lib/facts-write";
 import { WorkflowLockError } from "@/lib/workflow";
@@ -37,7 +37,7 @@ export async function POST(req: Request) {
   }
 
   const dims = getModelDims(modelId);
-  if (dims.length === 0) {
+  if (dims.length === 0 || getModelTenantId(modelId) !== session.tenantId) {
     return NextResponse.json({ error: "model_not_found" }, { status: 404 });
   }
 

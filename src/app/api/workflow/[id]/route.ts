@@ -18,7 +18,9 @@ export async function GET(
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const id = Number((await params).id);
   const item = getWorkflowItem(id);
-  if (!item) return NextResponse.json({ error: "not_found" }, { status: 404 });
+  if (!item || item.tenantId !== session.tenantId) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
   const history = getWorkflowHistory(id);
   return NextResponse.json({ ...item, history });
 }
@@ -37,7 +39,9 @@ export async function PATCH(
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const id = Number((await params).id);
   const item = getWorkflowItem(id);
-  if (!item) return NextResponse.json({ error: "not_found" }, { status: 404 });
+  if (!item || item.tenantId !== session.tenantId) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
   if (item.status !== "draft") {
     const { t } = await getServerT();
     return NextResponse.json(
@@ -64,7 +68,9 @@ export async function DELETE(
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const id = Number((await params).id);
   const item = getWorkflowItem(id);
-  if (!item) return NextResponse.json({ error: "not_found" }, { status: 404 });
+  if (!item || item.tenantId !== session.tenantId) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
   if (item.status !== "draft") {
     return NextResponse.json(
       { error: "not_deletable", message: "Sadece 'draft' durumundaki iş akışları silinebilir" },

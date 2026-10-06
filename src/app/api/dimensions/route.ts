@@ -12,9 +12,10 @@ export async function GET() {
       `SELECT d.id, d.code, d.name, d.type, d.description, d.visibility,
               d.owner_model_id AS ownerModelId, m.name AS ownerModelName
        FROM dimensions d LEFT JOIN models m ON m.id = d.owner_model_id
+       WHERE d.tenant_id = ?
        ORDER BY d.id`
     )
-    .all() as Array<{ id: number }>;
+    .all(session.tenantId) as Array<{ id: number }>;
   if (dims.length === 0) return NextResponse.json([]);
 
   const dimIds = dims.map((d) => d.id);
@@ -81,9 +82,9 @@ export async function POST(req: Request) {
   const id = Number(
     sqlite
       .prepare(
-        "INSERT INTO dimensions (code, name, type, description, visibility) VALUES (?,?,?,?,?)"
+        "INSERT INTO dimensions (tenant_id, code, name, type, description, visibility) VALUES (?,?,?,?,?,?)"
       )
-      .run(upper, name, type, description ?? null, visibility).lastInsertRowid
+      .run(session.tenantId, upper, name, type, description ?? null, visibility).lastInsertRowid
   );
   logAudit(session.id, "dimension.create", "dimension", id, { code: upper, name, visibility });
   return NextResponse.json({ id }, { status: 201 });

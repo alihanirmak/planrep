@@ -16,7 +16,7 @@ export async function POST(req: Request) {
   const parsed = schema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "invalid_request" }, { status: 400 });
 
-  const instance = getConnectorInstance(parsed.data.connector);
+  const instance = getConnectorInstance(parsed.data.connector, session.tenantId);
   if (!instance) return NextResponse.json({ error: "connector_not_found" }, { status: 404 });
 
   try {

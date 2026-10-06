@@ -112,11 +112,14 @@ export function markAllNotificationsRead(userId: number): number {
 // Turkce "ı/ş/ğ/ü/ö/ç" dahil) users tablosunda ad (bosluksuz, kucuk harf)
 // veya e-posta local-part'i ile tam eslesen kullanicilara cozer. Basit ama
 // deterministik bir mention semantigi (fuzzy/kismi eslesme kasitli olarak
-// yok — yanlis kisiye bildirim gitmesin).
-export function resolveMentionedUserIds(text: string): number[] {
+// yok — yanlis kisiye bildirim gitmesin). tenantId ZORUNLU: aksi halde baska
+// bir tenant'taki kullanici @mention edilip bildirim/erisim sizdirilabilirdi.
+export function resolveMentionedUserIds(text: string, tenantId: number): number[] {
   const tokens = [...text.matchAll(/@([\p{L}\p{N}._-]{2,40})/gu)].map((m) => m[1].toLowerCase());
   if (tokens.length === 0) return [];
-  const users = sqlite.prepare("SELECT id, name, email FROM users").all() as Array<{
+  const users = sqlite
+    .prepare("SELECT id, name, email FROM users WHERE tenant_id = ?")
+    .all(tenantId) as Array<{
     id: number;
     name: string;
     email: string;

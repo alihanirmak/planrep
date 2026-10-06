@@ -18,9 +18,9 @@ export async function GET(
       `SELECT d.id, d.code, d.name, d.type, d.description, d.visibility,
               d.owner_model_id AS ownerModelId, m.name AS ownerModelName
        FROM dimensions d LEFT JOIN models m ON m.id = d.owner_model_id
-       WHERE d.id = ?`
+       WHERE d.id = ? AND d.tenant_id = ?`
     )
-    .get(id);
+    .get(id, session.tenantId);
   if (!dim) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
   const members = sqlite
@@ -66,9 +66,9 @@ export async function PATCH(
          name = COALESCE(?, name),
          description = COALESCE(?, description),
          visibility = COALESCE(?, visibility)
-       WHERE id = ?`
+       WHERE id = ? AND tenant_id = ?`
     )
-    .run(name ?? null, description ?? null, visibility ?? null, id);
+    .run(name ?? null, description ?? null, visibility ?? null, id, session.tenantId);
   if (info.changes === 0) return NextResponse.json({ error: "not_found" }, { status: 404 });
   logAudit(session.id, "dimension.update", "dimension", id, parsed.data);
   return NextResponse.json({ ok: true });
@@ -83,6 +83,10 @@ export async function DELETE(
   if (session.role === "viewer") return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   const id = Number((await params).id);
+  const dim = sqlite
+    .prepare("SELECT id FROM dimensions WHERE id = ? AND tenant_id = ?")
+    .get(id, session.tenantId);
+  if (!dim) return NextResponse.json({ error: "not_found" }, { status: 404 });
   const used = sqlite
     .prepare("SELECT COUNT(*) AS c FROM model_dimensions WHERE dimension_id = ?")
     .get(id) as { c: number };

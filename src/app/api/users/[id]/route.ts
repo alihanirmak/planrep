@@ -5,10 +5,10 @@ import { db, users, sqlite } from "@/lib/db";
 import { getSession, hashPassword } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
 
-function adminCountSync(): number {
+function adminCountSync(tenantId: number): number {
   const row = sqlite
-    .prepare("SELECT COUNT(*) AS c FROM users WHERE role = 'admin'")
-    .get() as { c: number };
+    .prepare("SELECT COUNT(*) AS c FROM users WHERE role = 'admin' AND tenant_id = ?")
+    .get(tenantId) as { c: number };
   return row.c;
 }
 
@@ -38,7 +38,7 @@ export async function PATCH(
   }
 
   const target = db.select().from(users).where(eq(users.id, id)).get();
-  if (!target) {
+  if (!target || target.tenantId !== session.tenantId) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
@@ -47,7 +47,7 @@ export async function PATCH(
   // Son admin'in rolu dusurulemez — TOCTOU'yu engellemek icin kontrol ve
   // guncelleme ayni senkron transaction icinde (await yok, yarisma riski yok).
   const txResult = sqlite.transaction(() => {
-    if (role && role !== "admin" && target.role === "admin" && adminCountSync() <= 1) {
+    if (role && role !== "admin" && target.role === "admin" && adminCountSync(session.tenantId) <= 1) {
       return { error: "last_admin" as const };
     }
     db.update(users)
@@ -94,13 +94,13 @@ export async function DELETE(
   }
 
   const target = db.select().from(users).where(eq(users.id, id)).get();
-  if (!target) {
+  if (!target || target.tenantId !== session.tenantId) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
   // Son admin silinemez — kontrol + silme ayni senkron transaction icinde.
   const txResult = sqlite.transaction(() => {
-    if (target.role === "admin" && adminCountSync() <= 1) {
+    if (target.role === "admin" && adminCountSync(session.tenantId) <= 1) {
       return { error: "last_admin" as const };
     }
     db.delete(users).where(eq(users.id, id)).run();

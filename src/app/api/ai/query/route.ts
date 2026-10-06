@@ -53,7 +53,7 @@ export async function POST(req: Request) {
   if (!parsed.success) return NextResponse.json({ error: "invalid_request" }, { status: 400 });
   const { question } = parsed.data;
 
-  const models = getModels();
+  const models = getModels(session.tenantId);
   if (models.length === 0) return NextResponse.json({ error: "no_models" }, { status: 400 });
 
   const { t } = await getServerT();

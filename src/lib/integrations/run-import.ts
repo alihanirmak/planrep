@@ -3,7 +3,7 @@
 // senkronizasyon ayni kod yolunu kullanir — davranis asla birbirinden sapmaz.
 import { sqlite } from "../db";
 import { getConnectorInstance } from "../connectors";
-import { getModelDims, type DimInfo } from "../model";
+import { getModelDims, getModelTenantId, type DimInfo } from "../model";
 import { allowedSets } from "../access";
 import { upsertFacts } from "../facts-write";
 import { WorkflowLockError } from "../workflow";
@@ -24,6 +24,7 @@ export type RunImportResult =
   | { ok: false; error: "business_rule_violated"; message: string };
 
 export async function runConnectorImport(input: {
+  tenantId: number;
   connectorConfigId: number;
   source: string;
   modelId: number;
@@ -32,10 +33,11 @@ export async function runConnectorImport(input: {
   uploadLabel?: string;
   genericErrorMessage?: string;
 }): Promise<RunImportResult> {
-  const { connectorConfigId, source, modelId, mapping, userId } = input;
+  const { tenantId, connectorConfigId, source, modelId, mapping, userId } = input;
   const genericError = input.genericErrorMessage ?? "hata";
 
-  const connectorInstance = getConnectorInstance(connectorConfigId);
+  if (getModelTenantId(modelId) !== tenantId) return { ok: false, error: "model_not_found" };
+  const connectorInstance = getConnectorInstance(connectorConfigId, tenantId);
   if (!connectorInstance) return { ok: false, error: "connector_not_found" };
   const connector = connectorInstance.connector;
   const dims: DimInfo[] = getModelDims(modelId);

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { sqlite } from "@/lib/db";
-import { getModelDims } from "@/lib/model";
+import { getModelDims, getModelTenantId } from "@/lib/model";
 import { revertUpload } from "@/lib/facts-write";
 import { logAudit } from "@/lib/audit";
 
@@ -19,7 +19,9 @@ export async function POST(
   const upload = sqlite
     .prepare("SELECT id, status, model_id AS modelId FROM uploads WHERE id = ?")
     .get(id) as { id: number; status: string; modelId: number } | undefined;
-  if (!upload) return NextResponse.json({ error: "not_found" }, { status: 404 });
+  if (!upload || getModelTenantId(upload.modelId) !== session.tenantId) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
   if (upload.status !== "done") {
     return NextResponse.json({ error: "already_reverted" }, { status: 400 });
   }

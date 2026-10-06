@@ -171,6 +171,19 @@ describe("canAccessCommentEntity", () => {
     expect(canAccessCommentEntity(session, "report", String(privateReportId))).toBe(true);
   });
 
+  it("baska bir tenant'in admin'i (ayni tenantId'ye sahip olmayan) erisemez (cross-tenant sizinti onlemi)", () => {
+    const otherTenantAdmin: SessionUser = {
+      id: otherId,
+      tenantId: 2,
+      role: "admin",
+      email: "admin@tenant2.local",
+      name: "Tenant2 Admin",
+      locale: "tr",
+    };
+    expect(canAccessCommentEntity(otherTenantAdmin, "report", String(privateReportId))).toBe(false);
+    expect(canAccessCommentEntity(otherTenantAdmin, "report", String(sharedReportId))).toBe(false);
+  });
+
   it("var olmayan entity icin false doner", () => {
     const session = fakeSession(ownerId, "planner");
     expect(canAccessCommentEntity(session, "report", "999999")).toBe(false);
@@ -183,5 +196,5 @@ describe("canAccessCommentEntity", () => {
 });
 
 function fakeSession(id: number, role: SessionUser["role"]): SessionUser {
-  return { id, role, email: `${id}@test.local`, name: `User ${id}`, locale: "tr" };
+  return { id, tenantId: 1, role, email: `${id}@test.local`, name: `User ${id}`, locale: "tr" };
 }

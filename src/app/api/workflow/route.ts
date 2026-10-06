@@ -29,6 +29,7 @@ export async function GET(req: Request) {
   const modelIdParam = searchParams.get("modelId");
   const statusParam = searchParams.get("status") as WorkflowStatus | null;
   const items = listWorkflowItems({
+    tenantId: session.tenantId,
     modelId: modelIdParam ? Number(modelIdParam) : undefined,
     status: statusParam ?? undefined,
   });
@@ -53,10 +54,17 @@ export async function POST(req: Request) {
   }
   const { modelId, name, scopeFilters, approverId } = parsed.data;
 
-  const model = sqlite.prepare("SELECT id FROM models WHERE id = ?").get(modelId);
+  const model = sqlite.prepare("SELECT id FROM models WHERE id = ? AND tenant_id = ?").get(modelId, session.tenantId);
   if (!model) return NextResponse.json({ error: "model_not_found" }, { status: 404 });
 
-  const item = createWorkflowItem({ modelId, name, scopeFilters, ownerId: session.id, approverId });
+  const item = createWorkflowItem({
+    tenantId: session.tenantId,
+    modelId,
+    name,
+    scopeFilters,
+    ownerId: session.id,
+    approverId,
+  });
   logAudit(session.id, "workflow.create", "workflow", item.id, { modelId, name, scopeFilters });
   return NextResponse.json(item, { status: 201 });
 }

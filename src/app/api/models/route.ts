@@ -9,7 +9,7 @@ import { getServerT } from "@/lib/i18n-server";
 export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  return NextResponse.json(getModels());
+  return NextResponse.json(getModels(session.tenantId));
 }
 
 const createSchema = z.object({
@@ -36,8 +36,12 @@ export async function POST(req: Request) {
   if (exists) return NextResponse.json({ error: "code_exists" }, { status: 409 });
   for (const dimId of dimensionIds) {
     const dim = sqlite
-      .prepare("SELECT id, visibility, owner_model_id AS ownerModelId FROM dimensions WHERE id = ?")
-      .get(dimId) as { id: number; visibility: string; ownerModelId: number | null } | undefined;
+      .prepare(
+        "SELECT id, visibility, owner_model_id AS ownerModelId FROM dimensions WHERE id = ? AND tenant_id = ?"
+      )
+      .get(dimId, session.tenantId) as
+      | { id: number; visibility: string; ownerModelId: number | null }
+      | undefined;
     if (!dim) {
       return NextResponse.json({ error: "dimension_not_found" }, { status: 400 });
     }
@@ -54,8 +58,8 @@ export async function POST(req: Request) {
   const tx = sqlite.transaction(() => {
     modelId = Number(
       sqlite
-        .prepare("INSERT INTO models (code, name, description, created_at) VALUES (?,?,?,?)")
-        .run(upper, name, description ?? null, new Date().toISOString()).lastInsertRowid
+        .prepare("INSERT INTO models (tenant_id, code, name, description, created_at) VALUES (?,?,?,?,?)")
+        .run(session.tenantId, upper, name, description ?? null, new Date().toISOString()).lastInsertRowid
     );
     const ins = sqlite.prepare(
       "INSERT INTO model_dimensions (model_id, dimension_id, slot) VALUES (?,?,?)"

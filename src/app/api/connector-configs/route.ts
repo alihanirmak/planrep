@@ -12,7 +12,7 @@ export async function GET() {
 
   // Credential alanlarini (password tipi) response'a dahil etme — sadece
   // UI'nin "configured" gostermesi icin maskelenmis bir ozet dondur.
-  const configs = listConnectorConfigs().map((c) => {
+  const configs = listConnectorConfigs({ tenantId: session.tenantId }).map((c) => {
     const typeDef = getConnectorType(c.type);
     const maskedConfig: Record<string, string> = {};
     for (const field of typeDef?.configFields ?? []) {
@@ -50,7 +50,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const config = createConnectorConfig(parsed.data);
+  const config = createConnectorConfig({ ...parsed.data, tenantId: session.tenantId });
   logAudit(session.id, "connector_config.create", "connector_config", config.id, {
     type: parsed.data.type,
     name: parsed.data.name,

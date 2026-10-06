@@ -21,7 +21,10 @@ export async function PATCH(
   if (session.role !== "admin") return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   const id = Number((await params).id);
-  if (!getScheduledSync(id)) return NextResponse.json({ error: "not_found" }, { status: 404 });
+  const existing = getScheduledSync(id);
+  if (!existing || existing.tenantId !== session.tenantId) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
 
   const parsed = patchSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "invalid_request" }, { status: 400 });
@@ -40,7 +43,10 @@ export async function DELETE(
   if (session.role !== "admin") return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   const id = Number((await params).id);
-  if (!getScheduledSync(id)) return NextResponse.json({ error: "not_found" }, { status: 404 });
+  const existing = getScheduledSync(id);
+  if (!existing || existing.tenantId !== session.tenantId) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
 
   deleteScheduledSync(id);
   logAudit(session.id, "scheduled_sync.delete", "scheduled_sync", id);

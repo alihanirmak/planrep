@@ -68,7 +68,7 @@ export async function POST(req: Request) {
       .lastInsertRowid
   );
 
-  notifyCommentRecipients(session.id, entityType, entityId, text);
+  notifyCommentRecipients(session.id, session.tenantId, entityType, entityId, text);
 
   return NextResponse.json({ id }, { status: 201 });
 }
@@ -80,11 +80,12 @@ export async function POST(req: Request) {
 // mention bildirimi gonderilir.
 function notifyCommentRecipients(
   authorId: number,
+  tenantId: number,
   entityType: "report" | "dashboard" | "cell",
   entityId: string,
   text: string
 ) {
-  const mentionedIds = resolveMentionedUserIds(text).filter((id) => id !== authorId);
+  const mentionedIds = resolveMentionedUserIds(text, tenantId).filter((id) => id !== authorId);
   const link = entityType === "report" ? "/reports" : entityType === "dashboard" ? "/dashboards" : null;
 
   let entityName = entityId;

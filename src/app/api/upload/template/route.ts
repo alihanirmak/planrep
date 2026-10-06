@@ -16,8 +16,8 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const modelId = Number(url.searchParams.get("modelId"));
   const model = sqlite
-    .prepare("SELECT code, name FROM models WHERE id = ?")
-    .get(modelId) as { code: string; name: string } | undefined;
+    .prepare("SELECT code, name FROM models WHERE id = ? AND tenant_id = ?")
+    .get(modelId, session.tenantId) as { code: string; name: string } | undefined;
   if (!model) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
   const dims = getModelDims(modelId);

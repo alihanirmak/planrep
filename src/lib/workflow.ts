@@ -13,6 +13,7 @@ export type WorkflowStatus =
 
 export type WorkflowItem = {
   id: number;
+  tenantId: number;
   modelId: number;
   name: string;
   scopeFilters: Record<string, string[]>;
@@ -41,6 +42,7 @@ export type WorkflowAction = "submit" | "review" | "approve" | "reject" | "lock"
 
 type Row = {
   id: number;
+  tenant_id: number;
   model_id: number;
   name: string;
   scope_filters: string;
@@ -58,6 +60,7 @@ type Row = {
 function mapRow(r: Row): WorkflowItem {
   return {
     id: r.id,
+    tenantId: r.tenant_id,
     modelId: r.model_id,
     name: r.name,
     scopeFilters: JSON.parse(r.scope_filters),
@@ -73,9 +76,17 @@ function mapRow(r: Row): WorkflowItem {
   };
 }
 
-export function listWorkflowItems(filter?: { modelId?: number; status?: WorkflowStatus }): WorkflowItem[] {
+export function listWorkflowItems(filter?: {
+  tenantId?: number;
+  modelId?: number;
+  status?: WorkflowStatus;
+}): WorkflowItem[] {
   const where: string[] = [];
   const params: unknown[] = [];
+  if (filter?.tenantId != null) {
+    where.push("tenant_id = ?");
+    params.push(filter.tenantId);
+  }
   if (filter?.modelId != null) {
     where.push("model_id = ?");
     params.push(filter.modelId);
@@ -118,6 +129,7 @@ export function getWorkflowHistory(workflowId: number): WorkflowHistoryEntry[] {
 }
 
 export function createWorkflowItem(input: {
+  tenantId: number;
   modelId: number;
   name: string;
   scopeFilters: Record<string, string[]>;
@@ -129,10 +141,11 @@ export function createWorkflowItem(input: {
     sqlite
       .prepare(
         `INSERT INTO workflow_items
-           (model_id, name, scope_filters, status, owner_id, approver_id, created_at, updated_at)
-         VALUES (?,?,?,'draft',?,?,?,?)`
+           (tenant_id, model_id, name, scope_filters, status, owner_id, approver_id, created_at, updated_at)
+         VALUES (?,?,?,?,'draft',?,?,?,?)`
       )
       .run(
+        input.tenantId,
         input.modelId,
         input.name,
         JSON.stringify(input.scopeFilters),

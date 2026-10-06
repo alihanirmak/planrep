@@ -16,6 +16,12 @@ export type SsoConfig = {
   redirectUri: string;
   scopes: string;
   defaultRole: "admin" | "planner" | "viewer";
+  // Coklu-tenant: SSO yapilandirmasi su an GLOBAL (tek IdP), tenant bazli
+  // degil. Yeni provision edilen SSO kullanicilari bu tenant'a atanir
+  // (varsayilan: 1, default tenant). Gelecekte her tenant kendi IdP'sini
+  // tanimlayabilsin diye bu alan ayri tutuldu (bkz. ROADMAP Sprint 3.1
+  // madde 3 notu — tam coklu-tenant SSO kapsam disi birakildi).
+  defaultTenantId: number;
   providerLabel: string;
 };
 
@@ -47,6 +53,7 @@ export function getSsoConfig(): SsoConfig | null {
     redirectUri: envTrim("OIDC_REDIRECT_URI") ?? "http://localhost:3000/api/auth/sso/callback",
     scopes: envTrim("OIDC_SCOPES") ?? "openid email profile",
     defaultRole,
+    defaultTenantId: Number(envTrim("SSO_DEFAULT_TENANT_ID") ?? "1") || 1,
     providerLabel: envTrim("SSO_PROVIDER_LABEL") ?? "SSO",
   };
 }

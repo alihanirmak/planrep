@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { listFactAudit } from "@/lib/fact-audit";
+import { getModelTenantId } from "@/lib/model";
 
 export async function GET(req: Request) {
   const session = await getSession();
@@ -9,6 +10,9 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const modelId = Number(searchParams.get("modelId"));
   if (!modelId) return NextResponse.json({ error: "model_required" }, { status: 400 });
+  if (getModelTenantId(modelId) !== session.tenantId) {
+    return NextResponse.json({ error: "model_not_found" }, { status: 404 });
+  }
 
   const coordsParam = searchParams.get("coords"); // JSON: Record<dimCode,string>
   const uploadIdParam = searchParams.get("uploadId");

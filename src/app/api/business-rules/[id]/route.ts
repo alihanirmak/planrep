@@ -24,7 +24,9 @@ export async function PATCH(
 
   const id = Number((await params).id);
   const existing = getBusinessRule(id);
-  if (!existing) return NextResponse.json({ error: "not_found" }, { status: 404 });
+  if (!existing || existing.tenantId !== session.tenantId) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
 
   const parsed = patchSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "invalid_request" }, { status: 400 });
@@ -44,7 +46,9 @@ export async function DELETE(
 
   const id = Number((await params).id);
   const existing = getBusinessRule(id);
-  if (!existing) return NextResponse.json({ error: "not_found" }, { status: 404 });
+  if (!existing || existing.tenantId !== session.tenantId) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
 
   deleteBusinessRule(id);
   logAudit(session.id, "business_rule.delete", "business_rule", id, { name: existing.name });

@@ -20,6 +20,7 @@ export async function GET() {
       createdAt: users.createdAt,
     })
     .from(users)
+    .where(eq(users.tenantId, session.tenantId))
     .all();
   return NextResponse.json(rows);
 }
@@ -50,6 +51,7 @@ export async function POST(req: Request) {
   const inserted = db
     .insert(users)
     .values({
+      tenantId: session.tenantId,
       email,
       name,
       passwordHash: hashPassword(password),

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { listScheduledSyncs, createScheduledSync } from "@/lib/scheduled-sync";
-import { getModelDims } from "@/lib/model";
+import { getModelDims, getModelTenantId } from "@/lib/model";
 import { getConnectorConfig } from "@/lib/connector-configs";
 import { logAudit } from "@/lib/audit";
 
@@ -10,7 +10,7 @@ export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   if (session.role !== "admin") return NextResponse.json({ error: "forbidden" }, { status: 403 });
-  return NextResponse.json(listScheduledSyncs());
+  return NextResponse.json(listScheduledSyncs({ tenantId: session.tenantId }));
 }
 
 const createSchema = z.object({
@@ -33,14 +33,15 @@ export async function POST(req: Request) {
   }
   const { connectorConfigId, modelId } = parsed.data;
 
-  if (!getConnectorConfig(connectorConfigId)) {
+  const connectorConfig = getConnectorConfig(connectorConfigId);
+  if (!connectorConfig || connectorConfig.tenantId !== session.tenantId) {
     return NextResponse.json({ error: "connector_not_found" }, { status: 404 });
   }
-  if (getModelDims(modelId).length === 0) {
+  if (getModelTenantId(modelId) !== session.tenantId || getModelDims(modelId).length === 0) {
     return NextResponse.json({ error: "model_not_found" }, { status: 404 });
   }
 
-  const created = createScheduledSync({ ...parsed.data, createdBy: session.id });
+  const created = createScheduledSync({ ...parsed.data, tenantId: session.tenantId, createdBy: session.id });
   logAudit(session.id, "scheduled_sync.create", "scheduled_sync", created.id, {
     name: created.name,
     intervalMinutes: created.intervalMinutes,

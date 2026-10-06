@@ -165,6 +165,7 @@ describe("upsertFacts + workflow kilidi", () => {
         .run("fwplanner@test.local", "Planner", "x", "planner", new Date().toISOString()).lastInsertRowid
     );
     let item = workflow.createWorkflowItem({
+      tenantId: 1,
       modelId: lockModelId,
       name: "Kilit Testi",
       scopeFilters: { LD1: ["LOCKED1"] },
@@ -231,6 +232,7 @@ describe("upsertFacts + is kurali (business rule)", () => {
     );
     const businessRules = await import("./business-rules");
     businessRules.createBusinessRule({
+      tenantId: 1,
       modelId: ruleModelId,
       name: "OPEX negatif olamaz",
       scopeFilters: { RD1: ["OPEX"] },
@@ -240,6 +242,7 @@ describe("upsertFacts + is kurali (business rule)", () => {
       message: "OPEX negatif olamaz",
     });
     businessRules.createBusinessRule({
+      tenantId: 1,
       modelId: ruleModelId,
       name: "Buyuk deger uyarisi",
       scopeFilters: {},

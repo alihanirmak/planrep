@@ -25,6 +25,7 @@ services:
       OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
       OIDC_REDIRECT_URI: ${OIDC_REDIRECT_URI:-}
       SSO_DEFAULT_ROLE: ${SSO_DEFAULT_ROLE:-viewer}
+      SSO_DEFAULT_TENANT_ID: ${SSO_DEFAULT_TENANT_ID:-1}
       SSO_PROVIDER_LABEL: ${SSO_PROVIDER_LABEL:-}
     volumes:
       - planrep-data:/app/data

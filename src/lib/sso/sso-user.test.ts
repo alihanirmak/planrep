@@ -20,6 +20,7 @@ const config: SsoConfig = {
   redirectUri: "https://app.example/callback",
   scopes: "openid email profile",
   defaultRole: "viewer",
+  defaultTenantId: 1,
   providerLabel: "Okta",
 };
 

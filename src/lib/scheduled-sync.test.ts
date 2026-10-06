@@ -77,6 +77,7 @@ afterAll(() => {
 describe("createScheduledSync / getScheduledSync / listScheduledSyncs", () => {
   it("olusturur ve roundtrip ile geri okur", () => {
     const s = sched.createScheduledSync({
+      tenantId: 1,
       name: "Günlük Aktüel",
       connectorConfigId: sapMockConfigId,
       source: "C_GLACCOUNTBALANCE",
@@ -96,6 +97,7 @@ describe("createScheduledSync / getScheduledSync / listScheduledSyncs", () => {
   it("listScheduledSyncs en yeniyi en basta dondurur", () => {
     const before = sched.listScheduledSyncs();
     const s = sched.createScheduledSync({
+      tenantId: 1,
       name: "İkinci Senkronizasyon",
       connectorConfigId: sapMockConfigId,
       source: "C_GLACCOUNTBALANCE",
@@ -113,6 +115,7 @@ describe("createScheduledSync / getScheduledSync / listScheduledSyncs", () => {
 describe("updateScheduledSync / deleteScheduledSync", () => {
   it("active ve intervalMinutes alanlarini gunceller", () => {
     const s = sched.createScheduledSync({
+      tenantId: 1,
       name: "Güncellenecek",
       connectorConfigId: sapMockConfigId,
       source: "C_GLACCOUNTBALANCE",
@@ -128,6 +131,7 @@ describe("updateScheduledSync / deleteScheduledSync", () => {
 
   it("deleteScheduledSync kaydi siler", () => {
     const s = sched.createScheduledSync({
+      tenantId: 1,
       name: "Silinecek",
       connectorConfigId: sapMockConfigId,
       source: "C_GLACCOUNTBALANCE",
@@ -144,6 +148,7 @@ describe("updateScheduledSync / deleteScheduledSync", () => {
 describe("runScheduledSync", () => {
   it("basarili calistirmada last_status=success, last_inserted doldurulur ve upload olusur", async () => {
     const s = sched.createScheduledSync({
+      tenantId: 1,
       name: "Başarılı Çalışma",
       connectorConfigId: sapMockConfigId,
       source: "C_GLACCOUNTBALANCE",
@@ -170,6 +175,7 @@ describe("runScheduledSync", () => {
 
   it("eksik boyut eslemesi (validation hatasi) last_status=failed ve last_error doldurur", async () => {
     const s = sched.createScheduledSync({
+      tenantId: 1,
       name: "Hatalı Eşleme",
       connectorConfigId: sapMockConfigId,
       source: "C_GLACCOUNTBALANCE",
@@ -196,6 +202,7 @@ describe("runScheduledSync", () => {
 describe("findDueScheduledSyncs / runDueScheduledSyncs", () => {
   it("hic calismamis aktif bir senkronizasyon her zaman vadesi gelmis sayilir", () => {
     const s = sched.createScheduledSync({
+      tenantId: 1,
       name: "Vadesi Gelmiş (yeni)",
       connectorConfigId: sapMockConfigId,
       source: "C_GLACCOUNTBALANCE",
@@ -210,6 +217,7 @@ describe("findDueScheduledSyncs / runDueScheduledSyncs", () => {
 
   it("pasif bir senkronizasyon vadesi gelmis sayilmaz", () => {
     const s = sched.createScheduledSync({
+      tenantId: 1,
       name: "Pasif",
       connectorConfigId: sapMockConfigId,
       source: "C_GLACCOUNTBALANCE",
@@ -225,6 +233,7 @@ describe("findDueScheduledSyncs / runDueScheduledSyncs", () => {
 
   it("son calisma zamani interval icindeyse vadesi gelmemis sayilir", async () => {
     const s = sched.createScheduledSync({
+      tenantId: 1,
       name: "Az Önce Çalıştı",
       connectorConfigId: sapMockConfigId,
       source: "C_GLACCOUNTBALANCE",
@@ -240,6 +249,7 @@ describe("findDueScheduledSyncs / runDueScheduledSyncs", () => {
 
   it("son calisma zamani interval'i asmissa yeniden vadesi gelmis sayilir", async () => {
     const s = sched.createScheduledSync({
+      tenantId: 1,
       name: "Interval Aşıldı",
       connectorConfigId: sapMockConfigId,
       source: "C_GLACCOUNTBALANCE",
@@ -258,6 +268,7 @@ describe("findDueScheduledSyncs / runDueScheduledSyncs", () => {
 
   it("runDueScheduledSyncs sadece vadesi gelmis aktif senkronizasyonlari calistirir", async () => {
     const notDue = sched.createScheduledSync({
+      tenantId: 1,
       name: "Henüz Vadesi Gelmedi",
       connectorConfigId: sapMockConfigId,
       source: "C_GLACCOUNTBALANCE",
@@ -269,6 +280,7 @@ describe("findDueScheduledSyncs / runDueScheduledSyncs", () => {
     await sched.runScheduledSync(notDue.id); // calistir, artik vadesi gelmemis olacak
 
     const due = sched.createScheduledSync({
+      tenantId: 1,
       name: "Vadesi Geldi (bulk)",
       connectorConfigId: sapMockConfigId,
       source: "C_GLACCOUNTBALANCE",

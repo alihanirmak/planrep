@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { sqlite } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
+import { getModelTenantId } from "@/lib/model";
 
 export async function GET() {
   const session = await getSession();
@@ -13,10 +14,10 @@ export async function GET() {
       `SELECT r.id, r.name, r.owner_id AS ownerId, u.name AS ownerName, r.model_id AS modelId,
               r.shared, r.updated_at AS updatedAt
        FROM reports r LEFT JOIN users u ON u.id = r.owner_id
-       WHERE r.owner_id = ? OR r.shared = 1
+       WHERE r.tenant_id = ? AND (r.owner_id = ? OR r.shared = 1)
        ORDER BY r.updated_at DESC`
     )
-    .all(session.id) as Array<{ ownerId: number }>;
+    .all(session.tenantId, session.id) as Array<{ ownerId: number }>;
   return NextResponse.json(
     rows.map((r) => ({ ...r, mine: r.ownerId === session.id }))
   );
@@ -41,14 +42,17 @@ export async function POST(req: Request) {
   if (typeof def?.modelId !== "number") {
     return NextResponse.json({ error: "invalid_definition" }, { status: 400 });
   }
+  if (getModelTenantId(def.modelId) !== session.tenantId) {
+    return NextResponse.json({ error: "invalid_definition" }, { status: 400 });
+  }
 
   const now = new Date().toISOString();
   const id = Number(
     sqlite
       .prepare(
-        "INSERT INTO reports (name, owner_id, model_id, definition, shared, created_at, updated_at) VALUES (?,?,?,?,?,?,?)"
+        "INSERT INTO reports (tenant_id, name, owner_id, model_id, definition, shared, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)"
       )
-      .run(name, session.id, def.modelId, JSON.stringify(definition), shared ? 1 : 0, now, now)
+      .run(session.tenantId, name, session.id, def.modelId, JSON.stringify(definition), shared ? 1 : 0, now, now)
       .lastInsertRowid
   );
   logAudit(session.id, "report.create", "report", id, { name, shared });

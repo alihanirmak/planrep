@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { runQuery } from "@/lib/query";
+import { getModelTenantId } from "@/lib/model";
 import { MAX_AGGREGATE_RESULT_ROWS } from "@/lib/fact-filters";
 import { formatT } from "@/lib/i18n";
 import { getServerT } from "@/lib/i18n-server";
@@ -24,6 +25,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
   }
   const { modelId, rowDim, colDim, filters, page, pageSize } = parsed.data;
+  if (getModelTenantId(modelId) !== session.tenantId) {
+    return NextResponse.json({ error: "model_not_found" }, { status: 404 });
+  }
   const pagination = page != null && pageSize != null ? { page, pageSize } : undefined;
   const result = runQuery(modelId, rowDim, colDim, filters, session.id, pagination);
   if ("error" in result) {

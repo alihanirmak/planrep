@@ -98,6 +98,7 @@ function session(id: number, role: SessionUser["role"]): { id: number; role: Ses
 describe("createWorkflowItem / getWorkflowItem", () => {
   it("draft durumunda olusturur ve geri okunabilir", () => {
     const item = wf.createWorkflowItem({
+      tenantId: 1,
       modelId,
       name: "2026 Bütçe - Satış",
       scopeFilters: { CC: ["CC100"], VER: ["BUDGET"] },
@@ -111,32 +112,32 @@ describe("createWorkflowItem / getWorkflowItem", () => {
 
 describe("canTransition — durum makinesi ve yetki", () => {
   it("draft -> submitted sahibi tarafindan yapilabilir", () => {
-    const item = wf.createWorkflowItem({ modelId, name: "A", scopeFilters: {}, ownerId });
+    const item = wf.createWorkflowItem({ tenantId: 1, modelId, name: "A", scopeFilters: {}, ownerId });
     const check = wf.canTransition(item, "submit", session(ownerId, "planner"));
     expect(check.ok).toBe(true);
   });
 
   it("draft -> submitted sahibi olmayan planner tarafindan yapilamaz (forbidden)", () => {
-    const item = wf.createWorkflowItem({ modelId, name: "B", scopeFilters: {}, ownerId });
+    const item = wf.createWorkflowItem({ tenantId: 1, modelId, name: "B", scopeFilters: {}, ownerId });
     const check = wf.canTransition(item, "submit", session(otherId, "planner"));
     expect(check).toEqual({ ok: false, error: "forbidden" });
   });
 
   it("admin baskasinin draft'ini da submit edebilir", () => {
-    const item = wf.createWorkflowItem({ modelId, name: "C", scopeFilters: {}, ownerId });
+    const item = wf.createWorkflowItem({ tenantId: 1, modelId, name: "C", scopeFilters: {}, ownerId });
     const check = wf.canTransition(item, "submit", session(adminId, "admin"));
     expect(check.ok).toBe(true);
   });
 
   it("gecersiz gecis (draft -> approve) invalid_transition doner", () => {
-    const item = wf.createWorkflowItem({ modelId, name: "D", scopeFilters: {}, ownerId });
+    const item = wf.createWorkflowItem({ tenantId: 1, modelId, name: "D", scopeFilters: {}, ownerId });
     const check = wf.canTransition(item, "approve", session(adminId, "admin"));
     expect(check).toEqual({ ok: false, error: "invalid_transition" });
   });
 
   it("review/approve islemleri planner tarafindan yapilamaz (forbidden)", () => {
     const item = wf.applyTransition(
-      wf.createWorkflowItem({ modelId, name: "E", scopeFilters: {}, ownerId }),
+      wf.createWorkflowItem({ tenantId: 1, modelId, name: "E", scopeFilters: {}, ownerId }),
       { action: "submit", from: "draft", to: "submitted" },
       ownerId,
       null
@@ -146,7 +147,7 @@ describe("canTransition — durum makinesi ve yetki", () => {
   });
 
   it("atanmis approver, review/approve yapabilir (admin olmasa da)", () => {
-    const base = wf.createWorkflowItem({ modelId, name: "F", scopeFilters: {}, ownerId, approverId: otherId });
+    const base = wf.createWorkflowItem({ tenantId: 1, modelId, name: "F", scopeFilters: {}, ownerId, approverId: otherId });
     const submitted = wf.applyTransition(
       base,
       { action: "submit", from: "draft", to: "submitted" },
@@ -159,7 +160,7 @@ describe("canTransition — durum makinesi ve yetki", () => {
 
   it("reject islemi yorum (comment) gerektirir", () => {
     const submitted = wf.applyTransition(
-      wf.createWorkflowItem({ modelId, name: "G", scopeFilters: {}, ownerId }),
+      wf.createWorkflowItem({ tenantId: 1, modelId, name: "G", scopeFilters: {}, ownerId }),
       { action: "submit", from: "draft", to: "submitted" },
       ownerId,
       null
@@ -173,7 +174,7 @@ describe("canTransition — durum makinesi ve yetki", () => {
 
 describe("applyTransition — tam dongu + history", () => {
   it("draft -> submitted -> in_review -> approved -> locked zincirini tasiyip history'ye yazar", () => {
-    let item = wf.createWorkflowItem({ modelId, name: "Full Cycle", scopeFilters: { CC: ["CC100"] }, ownerId });
+    let item = wf.createWorkflowItem({ tenantId: 1, modelId, name: "Full Cycle", scopeFilters: { CC: ["CC100"] }, ownerId });
 
     item = wf.applyTransition(item, { action: "submit", from: "draft", to: "submitted" }, ownerId, null);
     expect(item.status).toBe("submitted");
@@ -200,6 +201,7 @@ describe("applyTransition — tam dongu + history", () => {
 describe("findBlockingLock — tek koordinat kilit kontrolu", () => {
   it("kilitli kapsamin icindeki koordinati bloke eder, disindakini bloke etmez", () => {
     let item = wf.createWorkflowItem({
+      tenantId: 1,
       modelId: lockModelId,
       name: "Lock Test",
       scopeFilters: { CC: ["CC100"], VER: ["BUDGET"] },
@@ -222,6 +224,7 @@ describe("findBlockingLock — tek koordinat kilit kontrolu", () => {
 
   it("kisit tanimlanmayan boyutlar icin her deger eslesir (wildcard)", () => {
     let item = wf.createWorkflowItem({
+      tenantId: 1,
       modelId: lockModelId,
       name: "Lock Wildcard",
       scopeFilters: { VER: ["BUDGET"] }, // CC icin kisit yok -> her CC eslesir
@@ -240,6 +243,7 @@ describe("findBlockingLock — tek koordinat kilit kontrolu", () => {
 describe("findBlockingLockForFilters — toplu islem kesisim kontrolu", () => {
   it("filtre kilitli kapsamla kesisiyorsa bloke eder", () => {
     let item = wf.createWorkflowItem({
+      tenantId: 1,
       modelId: overlapModelId,
       name: "Lock Overlap",
       scopeFilters: { CC: ["CC_ALL"] },

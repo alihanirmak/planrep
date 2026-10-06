@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSession } from "@/lib/auth";
-import { getModelDims } from "@/lib/model";
 import { runConnectorImport } from "@/lib/integrations/run-import";
 import { getServerT } from "@/lib/i18n-server";
 
@@ -22,15 +21,9 @@ export async function POST(req: Request) {
   if (!parsed.success) return NextResponse.json({ error: "invalid_request" }, { status: 400 });
   const { connector: connectorId, source, modelId, mapping } = parsed.data;
 
-  // Model yoksa dims.length === 0 olur ama bu durumu runConnectorImport'tan
-  // once (connector var mi kontrolunden sonra) ayirt edebilmek icin burada
-  // ayrica kontrol etmiyoruz — runConnectorImport zaten "model_not_found" donuyor.
-  if (getModelDims(modelId).length === 0) {
-    return NextResponse.json({ error: "model_not_found" }, { status: 404 });
-  }
-
   const { t } = await getServerT();
   const result = await runConnectorImport({
+    tenantId: session.tenantId,
     connectorConfigId: connectorId,
     source,
     modelId,

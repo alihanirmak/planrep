@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { sqlite } from "@/lib/db";
+import { getSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -13,14 +14,21 @@ type AuditRow = {
   user_name: string | null;
 };
 
-export default function AuditPage() {
+export default async function AuditPage() {
+  const session = (await getSession())!;
+  // Coklu-tenant: audit_log'un kendi tenant_id kolonu yok (transitive
+  // izolasyon) — INNER JOIN users ile sadece KENDI tenant'imizdaki
+  // kullanicilarin olusturdugu kayitlar gosterilir. user_id NULL olan
+  // (sistem/cron kaynakli, pratikte neredeyse hic olusmayan) kayitlar
+  // bu sorguda kasitli olarak gorunmez.
   const rows = sqlite
     .prepare(
       `SELECT a.id, a.action, a.entity, a.entity_id, a.detail, a.created_at, u.name AS user_name
-       FROM audit_log a LEFT JOIN users u ON u.id = a.user_id
+       FROM audit_log a JOIN users u ON u.id = a.user_id
+       WHERE u.tenant_id = ?
        ORDER BY a.id DESC LIMIT 200`
     )
-    .all() as AuditRow[];
+    .all(session.tenantId) as AuditRow[];
 
   return (
     <div>

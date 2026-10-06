@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { sqlite } from "@/lib/db";
-import { getModelDims } from "@/lib/model";
+import { getModelDims, getModelTenantId } from "@/lib/model";
 import { allowedSets } from "@/lib/access";
 import { buildFactWhereVariants, type WhereVariant } from "@/lib/fact-filters";
 import { findBlockingLockForFilters } from "@/lib/workflow";
@@ -33,6 +33,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
   }
   const { modelId, filters, page, pageSize } = parsed.data;
+  if (getModelTenantId(modelId) !== session.tenantId) {
+    return NextResponse.json({ error: "model_not_found" }, { status: 404 });
+  }
   const { dims, variants, empty } = buildWhere(modelId, filters, session.id);
   if (dims.length === 0) {
     return NextResponse.json({ error: "model_not_found" }, { status: 404 });
@@ -100,6 +103,9 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
   }
   const { modelId, filters } = parsed.data;
+  if (getModelTenantId(modelId) !== session.tenantId) {
+    return NextResponse.json({ error: "model_not_found" }, { status: 404 });
+  }
   const hasFilter = Object.values(filters).some((v) => v.length > 0);
   if (!hasFilter) {
     const { t } = await getServerT();

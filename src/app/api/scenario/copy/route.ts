@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { sqlite } from "@/lib/db";
-import { getModelDims } from "@/lib/model";
+import { getModelDims, getModelTenantId } from "@/lib/model";
 import { allowedSets } from "@/lib/access";
 import { buildFactWhereVariants } from "@/lib/fact-filters";
 import { upsertFacts, type FactWrite } from "@/lib/facts-write";
@@ -35,7 +35,9 @@ export async function POST(req: Request) {
   }
 
   const dims = getModelDims(modelId);
-  if (dims.length === 0) return NextResponse.json({ error: "model_not_found" }, { status: 404 });
+  if (dims.length === 0 || getModelTenantId(modelId) !== session.tenantId) {
+    return NextResponse.json({ error: "model_not_found" }, { status: 404 });
+  }
   const versionDim = dims.find((d) => d.type === "version");
   if (!versionDim) return NextResponse.json({ error: "no_version_dimension" }, { status: 400 });
 

@@ -15,33 +15,42 @@ export function getConnectorType(type: string): ConnectorTypeDef | undefined {
 
 export type ConnectorInstance = {
   configId: number;
+  tenantId: number;
   name: string;
   typeLabel: string;
   connector: Connector;
 };
 
-function instantiate(configId: number, type: ConnectorTypeId, name: string, config: Record<string, string>): ConnectorInstance | null {
+function instantiate(
+  configId: number,
+  tenantId: number,
+  type: ConnectorTypeId,
+  name: string,
+  config: Record<string, string>
+): ConnectorInstance | null {
   const typeDef = getConnectorType(type);
   if (!typeDef) return null;
-  return { configId, name, typeLabel: typeDef.label, connector: typeDef.create(config) };
+  return { configId, tenantId, name, typeLabel: typeDef.label, connector: typeDef.create(config) };
 }
 
-// Aktif tum connector_configs kayitlarini canli Connector orneklerine cevirir.
-export function listConnectorInstances(): ConnectorInstance[] {
-  const configs = listConnectorConfigs({ activeOnly: true });
+// Aktif tum connector_configs kayitlarini (BIR tenant icin) canli Connector
+// orneklerine cevirir.
+export function listConnectorInstances(tenantId: number): ConnectorInstance[] {
+  const configs = listConnectorConfigs({ tenantId, activeOnly: true });
   const out: ConnectorInstance[] = [];
   for (const cfg of configs) {
-    const inst = instantiate(cfg.id, cfg.type, cfg.name, cfg.config);
+    const inst = instantiate(cfg.id, cfg.tenantId, cfg.type, cfg.name, cfg.config);
     if (inst) out.push(inst);
   }
   return out;
 }
 
-// Tek bir connector_config id'sinden canli Connector orneği uretir (preview/import ucu icin).
-export function getConnectorInstance(configId: number): ConnectorInstance | null {
+// Tek bir connector_config id'sinden canli Connector orneği uretir (preview/import
+// ucu icin) — tenantId uyusmazsa null doner (baska tenant'in config'ine erisim yok).
+export function getConnectorInstance(configId: number, tenantId: number): ConnectorInstance | null {
   const cfg = getConnectorConfig(configId);
-  if (!cfg || !cfg.active) return null;
-  return instantiate(cfg.id, cfg.type, cfg.name, cfg.config);
+  if (!cfg || !cfg.active || cfg.tenantId !== tenantId) return null;
+  return instantiate(cfg.id, cfg.tenantId, cfg.type, cfg.name, cfg.config);
 }
 
 export * from "./types";

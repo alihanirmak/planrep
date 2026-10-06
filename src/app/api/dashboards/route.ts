@@ -13,10 +13,10 @@ export async function GET() {
       `SELECT d.id, d.name, d.owner_id AS ownerId, u.name AS ownerName, d.shared,
               d.updated_at AS updatedAt
        FROM dashboards d LEFT JOIN users u ON u.id = d.owner_id
-       WHERE d.owner_id = ? OR d.shared = 1
+       WHERE d.tenant_id = ? AND (d.owner_id = ? OR d.shared = 1)
        ORDER BY d.updated_at DESC`
     )
-    .all(session.id) as Array<{ ownerId: number }>;
+    .all(session.tenantId, session.id) as Array<{ ownerId: number }>;
   return NextResponse.json(rows.map((r) => ({ ...r, mine: r.ownerId === session.id })));
 }
 
@@ -39,9 +39,9 @@ export async function POST(req: Request) {
   const id = Number(
     sqlite
       .prepare(
-        "INSERT INTO dashboards (name, owner_id, definition, shared, created_at, updated_at) VALUES (?,?,?,?,?,?)"
+        "INSERT INTO dashboards (tenant_id, name, owner_id, definition, shared, created_at, updated_at) VALUES (?,?,?,?,?,?,?)"
       )
-      .run(name, session.id, JSON.stringify(definition), shared ? 1 : 0, now, now)
+      .run(session.tenantId, name, session.id, JSON.stringify(definition), shared ? 1 : 0, now, now)
       .lastInsertRowid
   );
   logAudit(session.id, "dashboard.create", "dashboard", id, { name, shared });

@@ -7,25 +7,31 @@ export type AccessEntry = { dimensionId: number; memberCodes: string[] };
 export type CommentEntityType = "report" | "dashboard" | "cell";
 
 // Yorum/okuma amacli entity-level yetkilendirme: rapor/dashboard sahibi,
-// paylasilan (shared=1) kayitlar veya admin erisebilir. "cell" turu henuz
+// paylasilan (shared=1) kayitlar veya ADMIN erisebilir. "cell" turu henuz
 // bir sahiplik modeline baglanmadigi icin sadece admin'e aciliyor.
+// ONEMLI: tenant kontrolu admin kisayolundan ONCE yapilir — aksi halde bir
+// tenant'in admin'i, baska bir tenant'a ait rapor/dashboard'un id'sini
+// tahmin ederek erisebilirdi (bu kontrol sirasi bilerek boyle; admin rolu
+// SADECE kendi tenant'i icinde "her seye erisebilir" anlamina gelir).
 export function canAccessCommentEntity(
   session: SessionUser,
   entityType: CommentEntityType,
   entityId: string
 ): boolean {
-  if (session.role === "admin") return true;
-
   if (entityType === "report" || entityType === "dashboard") {
     const table = entityType === "report" ? "reports" : "dashboards";
     const row = sqlite
-      .prepare(`SELECT owner_id, shared FROM ${table} WHERE id = ?`)
-      .get(Number(entityId)) as { owner_id: number; shared: number } | undefined;
-    if (!row) return false;
+      .prepare(`SELECT owner_id, shared, tenant_id FROM ${table} WHERE id = ?`)
+      .get(Number(entityId)) as { owner_id: number; shared: number; tenant_id: number } | undefined;
+    if (!row || row.tenant_id !== session.tenantId) return false;
+    if (session.role === "admin") return true;
     return row.owner_id === session.id || row.shared === 1;
   }
 
-  return false;
+  // "cell" turu: sahiplik modeli yok, admin'e aciliyor (tenant zaten
+  // session.role uzerinden dolayli olarak dogru tenant'a ait kabul edilir
+  // cunku admin rolu kendi tenant'inin disinda bir yetki tasimiyor).
+  return session.role === "admin";
 }
 
 export function getUserAccess(userId: number): AccessEntry[] {

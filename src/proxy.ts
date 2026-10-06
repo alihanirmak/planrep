@@ -2,7 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifySessionToken, SESSION_COOKIE } from "@/lib/session";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
 
-const PUBLIC_PATHS = ["/login", "/api/auth/login"];
+// Not: "/api/auth/sso" (login/callback/status) ve "/signup"+"/api/auth/signup"
+// de public olmali — oturumsuz bir kullanici SSO ile giris yapmaya veya yeni
+// bir tenant olusturmaya calisiyor olabilir. Oncesinde "/api/auth/sso/*"
+// burada eksikti (SSO girisi fiilen hic calismiyordu — middleware once
+// 401 donuyordu); bu oturumda duzeltildi.
+const PUBLIC_PATHS = [
+  "/login",
+  "/signup",
+  "/api/auth/login",
+  "/api/auth/signup",
+  "/api/auth/sso",
+];
 
 // Kaba taneli, bellek-ici rate limit kurallari: brute-force (login) ve
 // agir/pahali uclar (AI sorgu, export) icin basit bir koruma katmani.
@@ -29,6 +40,12 @@ const RATE_LIMIT_RULES: Array<{
     test: (p, m) => m === "POST" && p.startsWith("/api/export/"),
     limit: 30,
     windowMs: 5 * 60 * 1000,
+  },
+  {
+    name: "signup",
+    test: (p, m) => m === "POST" && p === "/api/auth/signup",
+    limit: 5,
+    windowMs: 15 * 60 * 1000,
   },
 ];
 

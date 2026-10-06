@@ -3,6 +3,7 @@ import type { ConnectorTypeId } from "./connectors/types";
 
 export type ConnectorConfig = {
   id: number;
+  tenantId: number;
   type: ConnectorTypeId;
   name: string;
   config: Record<string, string>;
@@ -13,6 +14,7 @@ export type ConnectorConfig = {
 
 type Row = {
   id: number;
+  tenant_id: number;
   type: ConnectorTypeId;
   name: string;
   config: string;
@@ -24,6 +26,7 @@ type Row = {
 function mapRow(r: Row): ConnectorConfig {
   return {
     id: r.id,
+    tenantId: r.tenant_id,
     type: r.type,
     name: r.name,
     config: JSON.parse(r.config),
@@ -33,9 +36,16 @@ function mapRow(r: Row): ConnectorConfig {
   };
 }
 
-export function listConnectorConfigs(opts?: { activeOnly?: boolean }): ConnectorConfig[] {
-  const where = opts?.activeOnly ? " WHERE active = 1" : "";
-  const rows = sqlite.prepare(`SELECT * FROM connector_configs${where} ORDER BY id ASC`).all() as Row[];
+export function listConnectorConfigs(opts?: { tenantId?: number; activeOnly?: boolean }): ConnectorConfig[] {
+  const where: string[] = [];
+  const params: unknown[] = [];
+  if (opts?.tenantId != null) {
+    where.push("tenant_id = ?");
+    params.push(opts.tenantId);
+  }
+  if (opts?.activeOnly) where.push("active = 1");
+  const sql = `SELECT * FROM connector_configs${where.length ? ` WHERE ${where.join(" AND ")}` : ""} ORDER BY id ASC`;
+  const rows = sqlite.prepare(sql).all(...params) as Row[];
   return rows.map(mapRow);
 }
 
@@ -45,6 +55,7 @@ export function getConnectorConfig(id: number): ConnectorConfig | null {
 }
 
 export function createConnectorConfig(input: {
+  tenantId: number;
   type: ConnectorTypeId;
   name: string;
   config: Record<string, string>;
@@ -53,9 +64,9 @@ export function createConnectorConfig(input: {
   const id = Number(
     sqlite
       .prepare(
-        "INSERT INTO connector_configs (type, name, config, active, created_at, updated_at) VALUES (?,?,?,1,?,?)"
+        "INSERT INTO connector_configs (tenant_id, type, name, config, active, created_at, updated_at) VALUES (?,?,?,?,1,?,?)"
       )
-      .run(input.type, input.name, JSON.stringify(input.config), now, now).lastInsertRowid
+      .run(input.tenantId, input.type, input.name, JSON.stringify(input.config), now, now).lastInsertRowid
   );
   return getConnectorConfig(id)!;
 }
@@ -93,6 +104,10 @@ export function deleteConnectorConfig(id: number) {
 // hicbir connector_configs kaydi yoksa, bunu otomatik olarak bir config
 // kaydina donusturur. Boylece .env.local uzerinden calisan mevcut kurulumlar
 // yeni dinamik sisteme gectikten sonra da elle yeniden yapilandirma gerektirmez.
+// Coklu-tenant: bu sadece HIC kayit yoksa (ilk kurulum/migrasyon) calisan,
+// tek seferlik bir islemdir — her zaman default tenant'a (id=1) yazar; sonradan
+// signup ile olusan yeni tenant'lar kendi connector'larini admin panelinden
+// elle ekler (otomatik seed almazlar, bu kasitlidir).
 export function seedConnectorConfigsFromEnv() {
   const existing = sqlite.prepare("SELECT COUNT(*) AS c FROM connector_configs").get() as { c: number };
   if (existing.c > 0) return;
@@ -100,7 +115,7 @@ export function seedConnectorConfigsFromEnv() {
   const now = new Date().toISOString();
   sqlite
     .prepare(
-      "INSERT INTO connector_configs (type, name, config, active, created_at, updated_at) VALUES (?,?,?,1,?,?)"
+      "INSERT INTO connector_configs (tenant_id, type, name, config, active, created_at, updated_at) VALUES (1,?,?,?,1,?,?)"
     )
     .run("sap-mock", "SAP S/4HANA (Mock)", JSON.stringify({}), now, now);
 
@@ -111,7 +126,7 @@ export function seedConnectorConfigsFromEnv() {
   if (url && user && pass) {
     sqlite
       .prepare(
-        "INSERT INTO connector_configs (type, name, config, active, created_at, updated_at) VALUES (?,?,?,1,?,?)"
+        "INSERT INTO connector_configs (tenant_id, type, name, config, active, created_at, updated_at) VALUES (1,?,?,?,1,?,?)"
       )
       .run(
         "sap-odata",

@@ -33,13 +33,36 @@
 ## Sıradaki adım
 
 - 2FA/TOTP commit edildi ve push edildi (`c76aeda`, origin/main güncel).
-- Sprint 3.1 madde 2 (SSO/OIDC) bu oturumda implemente edildi: `lib/sso/*`
-  (config/pkce/oidc-client/sso-user), `/api/auth/sso/{login,callback,status}`,
-  `users` tablosuna sso_provider/sso_subject/auth_provider, login+security
-  UI, i18n, `.env.example`/`docker-compose.yml`. 29 yeni test — toplam
-  **210 test**, hepsi geçiyor. Lint/typecheck/build temiz. **Henüz commit
-  edilmedi** — kullanıcı onayı bekleniyor, sonra Sprint 3.1 madde 3
-  (çoklu-tenant) için onay istenecek.
+- SSO/OIDC commit edildi ve push edildi (`31efa9a`, origin/main güncel).
+- Sprint 3.1 madde 3 (çoklu-tenant) bu oturumda implemente edildi — kullanıcı
+  "uzun sürecekse parçalara ayırabilirsin" dediği için iş 9 alt-adıma bölündü
+  (schema → session/signup → models/dimensions → reports/dashboards →
+  workflow/business-rules → connector-configs/scheduled-syncs →
+  facts/pivot/query/upload/scenario/fact-audit → comments/users → testler),
+  her adımda typecheck+test ile ara doğrulama yapıldı.
+  - Mimari karar: "doğrudan + transitive" karma izolasyon — `tenant_id`
+    sadece üst seviye kaynaklara (`users/models/dimensions/reports/
+    dashboards/workflow_items/business_rules/connector_configs/
+    scheduled_syncs`) eklendi + yeni `tenants` tablosu; `facts/uploads/
+    comments/notifications/fact_audit` gibi çocuk tablolar kendi
+    `tenant_id`'sine sahip değil, ebeveyn kaynağın (`model_id`/entity
+    sahipliği) tenant kontrolünden GEÇEREK (transitive) izole ediliyor.
+  - Ayrı "superadmin" rolü yok — her tenant kendi admin'ini self-service
+    `/signup` (`/api/auth/signup`) ile oluşturuyor.
+  - **Bu geçiş sırasında bulunan ve düzeltilen kritik güvenlik açıkları**
+    (önceki oturumlardan kalma, bu işin kapsamı dışında ama düzeltilmesi
+    gerekliydi): `canAccessCommentEntity`'de admin kısayolu tenant
+    kontrolünden ÖNCE geliyordu (cross-tenant veri sızıntısı riski) — sıra
+    düzeltildi; `/api/auth/sso/*` + yeni `/signup` `proxy.ts` `PUBLIC_PATHS`
+    listesinde YOKTU (SSO girişi fiilen hiç çalışmıyordu, middleware önce
+    401 dönüyordu) — eklendi; `resolveMentionedUserIds` tüm kullanıcıları
+    tenant filtresi olmadan tarıyordu — düzeltildi.
+  - 9 yeni test (`tenant.test.ts`, `model.test.ts`, `access.test.ts`'e
+    cross-tenant admin testi) — toplam **219 test**, hepsi geçiyor.
+    Lint (0 hata)/typecheck/build hepsi temiz.
+  - **Henüz commit edilmedi** — kullanıcı onayı bekleniyor.
+- Sprint 3.1'in TÜMÜ (2FA + SSO + çoklu-tenant) artık tamamlandı.
+  Sıradaki: Sprint 3.2 madde 1 (virtualized grid) için onay istenecek.
 
 ---
 

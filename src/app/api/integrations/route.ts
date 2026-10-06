@@ -6,7 +6,7 @@ export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const instances = listConnectorInstances();
+  const instances = listConnectorInstances(session.tenantId);
   const list = await Promise.all(
     instances.map(async (inst) => ({
       id: inst.configId,

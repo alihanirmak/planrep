@@ -7,8 +7,20 @@ import {
   uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 
+export const tenants = sqliteTable("tenants", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  code: text("code").notNull().unique(),
+  name: text("name").notNull(),
+  createdAt: text("created_at").notNull(),
+});
+
 export const users = sqliteTable("users", {
   id: integer("id").primaryKey({ autoIncrement: true }),
+  // Coklu-tenant: her kullanici TAM OLARAK bir tenant'a aittir. email halen
+  // GLOBAL olarak benzersizdir (tenant'lar arasinda da) - bu bilinen, kasitli
+  // bir basitlestirme (bkz. docs/ROADMAP.md Sprint 3.1 madde 3 notu); ayni
+  // email'in birden fazla tenant'ta ayri hesaplarla var olmasi desteklenmez.
+  tenantId: integer("tenant_id").notNull().default(1),
   email: text("email").notNull().unique(),
   name: text("name").notNull(),
   passwordHash: text("password_hash").notNull(),
@@ -43,6 +55,7 @@ export const users = sqliteTable("users", {
 
 export const dimensions = sqliteTable("dimensions", {
   id: integer("id").primaryKey({ autoIncrement: true }),
+  tenantId: integer("tenant_id").notNull().default(1),
   code: text("code").notNull().unique(),
   name: text("name").notNull(),
   type: text("type", { enum: ["standard", "time", "version"] })
@@ -65,6 +78,7 @@ export const dimensionMembers = sqliteTable(
 
 export const models = sqliteTable("models", {
   id: integer("id").primaryKey({ autoIncrement: true }),
+  tenantId: integer("tenant_id").notNull().default(1),
   code: text("code").notNull().unique(),
   name: text("name").notNull(),
   description: text("description"),
@@ -124,6 +138,7 @@ export const uploads = sqliteTable("uploads", {
 // definition: JSON — satir/sutun boyutlari, filtreler, hesaplanan kolonlar, kosullu bicimlendirme
 export const reports = sqliteTable("reports", {
   id: integer("id").primaryKey({ autoIncrement: true }),
+  tenantId: integer("tenant_id").notNull().default(1),
   name: text("name").notNull(),
   ownerId: integer("owner_id").notNull(),
   modelId: integer("model_id").notNull(),
@@ -135,6 +150,7 @@ export const reports = sqliteTable("reports", {
 
 export const dashboards = sqliteTable("dashboards", {
   id: integer("id").primaryKey({ autoIncrement: true }),
+  tenantId: integer("tenant_id").notNull().default(1),
   name: text("name").notNull(),
   ownerId: integer("owner_id").notNull(),
   definition: text("definition").notNull(),
@@ -170,6 +186,7 @@ export const workflowItems = sqliteTable(
   "workflow_items",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
+    tenantId: integer("tenant_id").notNull().default(1),
     modelId: integer("model_id").notNull(),
     name: text("name").notNull(),
     scopeFilters: text("scope_filters").notNull(),
@@ -210,6 +227,7 @@ export const businessRules = sqliteTable(
   "business_rules",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
+    tenantId: integer("tenant_id").notNull().default(1),
     modelId: integer("model_id").notNull(),
     name: text("name").notNull(),
     scopeFilters: text("scope_filters").notNull(),
@@ -258,6 +276,7 @@ export const factAudit = sqliteTable(
 // (ornek sap-odata icin: {url, user, pass, entities}).
 export const connectorConfigs = sqliteTable("connector_configs", {
   id: integer("id").primaryKey({ autoIncrement: true }),
+  tenantId: integer("tenant_id").notNull().default(1),
   type: text("type").notNull(),
   name: text("name").notNull(),
   config: text("config").notNull(),
@@ -300,6 +319,7 @@ export const scheduledSyncs = sqliteTable(
   "scheduled_syncs",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
+    tenantId: integer("tenant_id").notNull().default(1),
     name: text("name").notNull(),
     connectorConfigId: integer("connector_config_id").notNull(),
     source: text("source").notNull(),

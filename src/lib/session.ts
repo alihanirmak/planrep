@@ -42,6 +42,7 @@ export type Role = "admin" | "planner" | "viewer";
 
 export type SessionUser = {
   id: number;
+  tenantId: number;
   email: string;
   name: string;
   role: Role;

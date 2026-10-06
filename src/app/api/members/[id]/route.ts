@@ -43,8 +43,12 @@ export async function PATCH(
 
   const id = Number((await params).id);
   const row = sqlite
-    .prepare("SELECT id, dimension_id AS dimensionId FROM dimension_members WHERE id = ?")
-    .get(id) as { id: number; dimensionId: number } | undefined;
+    .prepare(
+      `SELECT dm.id, dm.dimension_id AS dimensionId FROM dimension_members dm
+       JOIN dimensions d ON d.id = dm.dimension_id
+       WHERE dm.id = ? AND d.tenant_id = ?`
+    )
+    .get(id, session.tenantId) as { id: number; dimensionId: number } | undefined;
   if (!row) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
   const parsed = patchSchema.safeParse(await req.json().catch(() => null));
@@ -89,6 +93,14 @@ export async function DELETE(
   if (session.role === "viewer") return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   const id = Number((await params).id);
+  const row = sqlite
+    .prepare(
+      `SELECT dm.id FROM dimension_members dm
+       JOIN dimensions d ON d.id = dm.dimension_id
+       WHERE dm.id = ? AND d.tenant_id = ?`
+    )
+    .get(id, session.tenantId);
+  if (!row) return NextResponse.json({ error: "not_found" }, { status: 404 });
   const children = sqlite
     .prepare("SELECT COUNT(*) AS c FROM dimension_members WHERE parent_id = ?")
     .get(id) as { c: number };

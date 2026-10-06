@@ -14,6 +14,8 @@ export async function GET(
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
   const id = Number((await params).id);
+  const user = sqlite.prepare("SELECT id FROM users WHERE id = ? AND tenant_id = ?").get(id, session.tenantId);
+  if (!user) return NextResponse.json({ error: "not_found" }, { status: 404 });
   return NextResponse.json(getUserAccess(id));
 }
 
@@ -35,7 +37,7 @@ export async function PUT(
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
   const id = Number((await params).id);
-  const user = sqlite.prepare("SELECT id FROM users WHERE id = ?").get(id);
+  const user = sqlite.prepare("SELECT id FROM users WHERE id = ? AND tenant_id = ?").get(id, session.tenantId);
   if (!user) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
   const parsed = putSchema.safeParse(await req.json().catch(() => null));

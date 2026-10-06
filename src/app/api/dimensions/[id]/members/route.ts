@@ -26,7 +26,9 @@ export async function POST(
   }
   const { code, name, parentCode, orderIdx } = parsed.data;
 
-  const dim = sqlite.prepare("SELECT id FROM dimensions WHERE id = ?").get(dimensionId);
+  const dim = sqlite
+    .prepare("SELECT id FROM dimensions WHERE id = ? AND tenant_id = ?")
+    .get(dimensionId, session.tenantId);
   if (!dim) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
   const exists = sqlite

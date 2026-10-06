@@ -50,6 +50,7 @@ afterAll(() => {
 describe("createBusinessRule / listBusinessRules / updateBusinessRule / deleteBusinessRule", () => {
   it("kural olusturulup okunabilir", () => {
     const rule = br.createBusinessRule({
+      tenantId: 1,
       modelId,
       name: "Bütçe negatif olamaz",
       scopeFilters: { ACC: ["OPEX"] },
@@ -69,6 +70,7 @@ describe("createBusinessRule / listBusinessRules / updateBusinessRule / deleteBu
         .run("BRTEST2", "Other", new Date().toISOString()).lastInsertRowid
     );
     br.createBusinessRule({
+      tenantId: 1,
       modelId: otherModelId,
       name: "Diger model kurali",
       scopeFilters: {},
@@ -83,6 +85,7 @@ describe("createBusinessRule / listBusinessRules / updateBusinessRule / deleteBu
 
   it("updateBusinessRule alanlari gunceller", () => {
     const rule = br.createBusinessRule({
+      tenantId: 1,
       modelId,
       name: "Guncellenecek",
       scopeFilters: {},
@@ -98,6 +101,7 @@ describe("createBusinessRule / listBusinessRules / updateBusinessRule / deleteBu
 
   it("deleteBusinessRule kuralı siler", () => {
     const rule = br.createBusinessRule({
+      tenantId: 1,
       modelId,
       name: "Silinecek",
       scopeFilters: {},
@@ -111,6 +115,7 @@ describe("createBusinessRule / listBusinessRules / updateBusinessRule / deleteBu
 
   it("active=false kurallar listBusinessRules(activeOnly) ile gelmez", () => {
     const rule = br.createBusinessRule({
+      tenantId: 1,
       modelId,
       name: "Pasif kural",
       scopeFilters: {},
@@ -127,6 +132,7 @@ describe("createBusinessRule / listBusinessRules / updateBusinessRule / deleteBu
 describe("evaluateBusinessRules", () => {
   it("kapsam ve esik eslesirse block ihlali doner", () => {
     const rule = br.createBusinessRule({
+      tenantId: 1,
       modelId,
       name: "OPEX negatif olamaz",
       scopeFilters: { ACC: ["OPEX"] },
@@ -151,6 +157,7 @@ describe("evaluateBusinessRules", () => {
 
   it("warn siddetindeki kural blocking'e degil warnings'e girer", () => {
     const rule = br.createBusinessRule({
+      tenantId: 1,
       modelId,
       name: "Buyuk deger uyarisi",
       scopeFilters: {},
@@ -167,6 +174,7 @@ describe("evaluateBusinessRules", () => {
 describe("BusinessRuleError", () => {
   it("ihlal mesajlarini birlestirir", () => {
     const rule = br.createBusinessRule({
+      tenantId: 1,
       modelId,
       name: "Test Kural",
       scopeFilters: {},

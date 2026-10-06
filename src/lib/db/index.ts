@@ -13,8 +13,15 @@ sqlite.pragma("journal_mode = WAL");
 sqlite.pragma("foreign_keys = ON");
 
 const DDL = `
+CREATE TABLE IF NOT EXISTS tenants (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  code TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id INTEGER NOT NULL DEFAULT 1,
   email TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL,
   password_hash TEXT NOT NULL,
@@ -24,6 +31,7 @@ CREATE TABLE IF NOT EXISTS users (
 );
 CREATE TABLE IF NOT EXISTS dimensions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id INTEGER NOT NULL DEFAULT 1,
   code TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL,
   type TEXT NOT NULL DEFAULT 'standard'
@@ -39,6 +47,7 @@ CREATE TABLE IF NOT EXISTS dimension_members (
 CREATE UNIQUE INDEX IF NOT EXISTS uq_member_dim_code ON dimension_members(dimension_id, code);
 CREATE TABLE IF NOT EXISTS models (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id INTEGER NOT NULL DEFAULT 1,
   code TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL,
   description TEXT,
@@ -73,6 +82,7 @@ CREATE TABLE IF NOT EXISTS uploads (
 );
 CREATE TABLE IF NOT EXISTS reports (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id INTEGER NOT NULL DEFAULT 1,
   name TEXT NOT NULL,
   owner_id INTEGER NOT NULL,
   model_id INTEGER NOT NULL,
@@ -83,6 +93,7 @@ CREATE TABLE IF NOT EXISTS reports (
 );
 CREATE TABLE IF NOT EXISTS dashboards (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id INTEGER NOT NULL DEFAULT 1,
   name TEXT NOT NULL,
   owner_id INTEGER NOT NULL,
   definition TEXT NOT NULL,
@@ -117,6 +128,7 @@ CREATE TABLE IF NOT EXISTS comments (
 );
 CREATE TABLE IF NOT EXISTS workflow_items (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id INTEGER NOT NULL DEFAULT 1,
   model_id INTEGER NOT NULL,
   name TEXT NOT NULL,
   scope_filters TEXT NOT NULL,
@@ -144,6 +156,7 @@ CREATE TABLE IF NOT EXISTS workflow_history (
 CREATE INDEX IF NOT EXISTS ix_workflow_history_wf ON workflow_history(workflow_id);
 CREATE TABLE IF NOT EXISTS business_rules (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id INTEGER NOT NULL DEFAULT 1,
   model_id INTEGER NOT NULL,
   name TEXT NOT NULL,
   scope_filters TEXT NOT NULL,
@@ -171,6 +184,7 @@ CREATE INDEX IF NOT EXISTS ix_fact_audit_model ON fact_audit(model_id);
 CREATE INDEX IF NOT EXISTS ix_fact_audit_upload ON fact_audit(upload_id);
 CREATE TABLE IF NOT EXISTS connector_configs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id INTEGER NOT NULL DEFAULT 1,
   type TEXT NOT NULL,
   name TEXT NOT NULL,
   config TEXT NOT NULL,
@@ -191,6 +205,7 @@ CREATE INDEX IF NOT EXISTS ix_notifications_user ON notifications(user_id);
 CREATE INDEX IF NOT EXISTS ix_notifications_user_unread ON notifications(user_id, is_read);
 CREATE TABLE IF NOT EXISTS scheduled_syncs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id INTEGER NOT NULL DEFAULT 1,
   name TEXT NOT NULL,
   connector_config_id INTEGER NOT NULL,
   source TEXT NOT NULL,
@@ -211,6 +226,19 @@ CREATE INDEX IF NOT EXISTS ix_scheduled_syncs_active ON scheduled_syncs(active);
 
 sqlite.exec(DDL);
 
+// Coklu-tenant bootstrap: tenants tablosu bombos ise bir "default" tenant
+// olusturulur. Bu INSERT, asagidaki ALTER TABLE ... DEFAULT 1 migration'lari
+// calismadan ONCE (ayni senkron modul-yukleme sirasinda) yapildigi icin,
+// mevcut (eski) veritabanlarindaki tum satirlar icin DEFAULT 1'in gercekten
+// gecerli bir tenant'a karsilik gelmesi garanti edilir (yeni tabloda ilk
+// INSERT oldugundan AUTOINCREMENT id=1 alir).
+const tenantCount = sqlite.prepare("SELECT COUNT(*) AS c FROM tenants").get() as { c: number };
+if (tenantCount.c === 0) {
+  sqlite
+    .prepare("INSERT INTO tenants (code, name, created_at) VALUES (?,?,?)")
+    .run("default", "Default", new Date().toISOString());
+}
+
 // Sema gecisleri (mevcut veritabanlarina kolon ekleme)
 for (const migration of [
   "ALTER TABLE uploads ADD COLUMN replaced_rows TEXT",
@@ -223,6 +251,15 @@ for (const migration of [
   "ALTER TABLE users ADD COLUMN sso_provider TEXT",
   "ALTER TABLE users ADD COLUMN sso_subject TEXT",
   "ALTER TABLE users ADD COLUMN auth_provider TEXT NOT NULL DEFAULT 'local'",
+  "ALTER TABLE users ADD COLUMN tenant_id INTEGER NOT NULL DEFAULT 1",
+  "ALTER TABLE models ADD COLUMN tenant_id INTEGER NOT NULL DEFAULT 1",
+  "ALTER TABLE dimensions ADD COLUMN tenant_id INTEGER NOT NULL DEFAULT 1",
+  "ALTER TABLE reports ADD COLUMN tenant_id INTEGER NOT NULL DEFAULT 1",
+  "ALTER TABLE dashboards ADD COLUMN tenant_id INTEGER NOT NULL DEFAULT 1",
+  "ALTER TABLE workflow_items ADD COLUMN tenant_id INTEGER NOT NULL DEFAULT 1",
+  "ALTER TABLE business_rules ADD COLUMN tenant_id INTEGER NOT NULL DEFAULT 1",
+  "ALTER TABLE connector_configs ADD COLUMN tenant_id INTEGER NOT NULL DEFAULT 1",
+  "ALTER TABLE scheduled_syncs ADD COLUMN tenant_id INTEGER NOT NULL DEFAULT 1",
 ]) {
   try {
     sqlite.exec(migration);

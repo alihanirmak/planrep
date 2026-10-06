@@ -12,6 +12,7 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const modelIdParam = searchParams.get("modelId");
   const rules = listBusinessRules({
+    tenantId: session.tenantId,
     modelId: modelIdParam ? Number(modelIdParam) : undefined,
   });
   return NextResponse.json(rules);
@@ -36,10 +37,12 @@ export async function POST(req: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid_request", detail: parsed.error.issues[0]?.message }, { status: 400 });
   }
-  const model = sqlite.prepare("SELECT id FROM models WHERE id = ?").get(parsed.data.modelId);
+  const model = sqlite
+    .prepare("SELECT id FROM models WHERE id = ? AND tenant_id = ?")
+    .get(parsed.data.modelId, session.tenantId);
   if (!model) return NextResponse.json({ error: "model_not_found" }, { status: 404 });
 
-  const rule = createBusinessRule(parsed.data);
+  const rule = createBusinessRule({ ...parsed.data, tenantId: session.tenantId });
   logAudit(session.id, "business_rule.create", "business_rule", rule.id, parsed.data);
   return NextResponse.json(rule, { status: 201 });
 }

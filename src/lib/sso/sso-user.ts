@@ -8,6 +8,7 @@ import type { IdTokenClaims } from "./oidc-client";
 
 export type SsoLoginResult = {
   id: number;
+  tenantId: number;
   email: string;
   name: string;
   role: "admin" | "planner" | "viewer";
@@ -54,6 +55,7 @@ export function findOrProvisionSsoUser(
   const inserted = db
     .insert(users)
     .values({
+      tenantId: config.defaultTenantId,
       email,
       name: claims.name?.trim() || email,
       passwordHash: hashPassword(randomPassword),
@@ -71,10 +73,18 @@ export function findOrProvisionSsoUser(
 
 function toResult(user: {
   id: number;
+  tenantId: number;
   email: string;
   name: string;
   role: "admin" | "planner" | "viewer";
   locale: string;
 }): SsoLoginResult {
-  return { id: user.id, email: user.email, name: user.name, role: user.role, locale: user.locale };
+  return {
+    id: user.id,
+    tenantId: user.tenantId,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    locale: user.locale,
+  };
 }

@@ -7,6 +7,7 @@ export type RuleSeverity = "block" | "warn";
 
 export type BusinessRule = {
   id: number;
+  tenantId: number;
   modelId: number;
   name: string;
   scopeFilters: Record<string, string[]>;
@@ -21,6 +22,7 @@ export type BusinessRule = {
 
 type Row = {
   id: number;
+  tenant_id: number;
   model_id: number;
   name: string;
   scope_filters: string;
@@ -36,6 +38,7 @@ type Row = {
 function mapRow(r: Row): BusinessRule {
   return {
     id: r.id,
+    tenantId: r.tenant_id,
     modelId: r.model_id,
     name: r.name,
     scopeFilters: JSON.parse(r.scope_filters),
@@ -49,9 +52,17 @@ function mapRow(r: Row): BusinessRule {
   };
 }
 
-export function listBusinessRules(filter?: { modelId?: number; activeOnly?: boolean }): BusinessRule[] {
+export function listBusinessRules(filter?: {
+  tenantId?: number;
+  modelId?: number;
+  activeOnly?: boolean;
+}): BusinessRule[] {
   const where: string[] = [];
   const params: unknown[] = [];
+  if (filter?.tenantId != null) {
+    where.push("tenant_id = ?");
+    params.push(filter.tenantId);
+  }
   if (filter?.modelId != null) {
     where.push("model_id = ?");
     params.push(filter.modelId);
@@ -67,6 +78,7 @@ export function getBusinessRule(id: number): BusinessRule | null {
 }
 
 export function createBusinessRule(input: {
+  tenantId: number;
   modelId: number;
   name: string;
   scopeFilters: Record<string, string[]>;
@@ -80,10 +92,11 @@ export function createBusinessRule(input: {
     sqlite
       .prepare(
         `INSERT INTO business_rules
-           (model_id, name, scope_filters, op, value, severity, message, active, created_at, updated_at)
-         VALUES (?,?,?,?,?,?,?,1,?,?)`
+           (tenant_id, model_id, name, scope_filters, op, value, severity, message, active, created_at, updated_at)
+         VALUES (?,?,?,?,?,?,?,?,1,?,?)`
       )
       .run(
+        input.tenantId,
         input.modelId,
         input.name,
         JSON.stringify(input.scopeFilters),

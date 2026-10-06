@@ -20,7 +20,9 @@ export async function POST(
 
   const id = Number((await params).id);
   const item = getWorkflowItem(id);
-  if (!item) return NextResponse.json({ error: "not_found" }, { status: 404 });
+  if (!item || item.tenantId !== session.tenantId) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
 
   const parsed = schema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "invalid_request" }, { status: 400 });

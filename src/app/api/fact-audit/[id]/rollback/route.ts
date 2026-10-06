@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { getFactAuditEntry, rollbackFactAudit, FactAuditNotFoundError } from "@/lib/fact-audit";
+import { getModelTenantId } from "@/lib/model";
 import { WorkflowLockError } from "@/lib/workflow";
 import { BusinessRuleError } from "@/lib/business-rules";
 import { logAudit } from "@/lib/audit";
@@ -15,7 +16,9 @@ export async function POST(
 
   const id = Number((await params).id);
   const entry = getFactAuditEntry(id);
-  if (!entry) return NextResponse.json({ error: "not_found" }, { status: 404 });
+  if (!entry || getModelTenantId(entry.modelId) !== session.tenantId) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
 
   try {
     rollbackFactAudit(id, session.id);
