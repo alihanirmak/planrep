@@ -1,7 +1,7 @@
 import { sqlite } from "./db";
 import { getModelDims, type Member } from "./model";
 import { allowedSets } from "./access";
-import { buildFactWhereVariants, sumGroupedRows } from "./fact-filters";
+import { buildFactWhereVariants, sumGroupedRows, MAX_AGGREGATE_RESULT_ROWS } from "./fact-filters";
 import type { QueryResult, QueryRow } from "./report-types";
 
 export function runQuery(
@@ -36,6 +36,9 @@ export function runQuery(
     c: string;
     v: number;
   }>;
+  if (raw.length > MAX_AGGREGATE_RESULT_ROWS) {
+    return { error: "result_too_large" };
+  }
 
   // Yaprak toplamlarindan hiyerarsik rollup
   const leafSums = new Map<string, Map<string, number>>();

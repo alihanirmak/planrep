@@ -4,7 +4,7 @@ import { getSession } from "@/lib/auth";
 import { sqlite } from "@/lib/db";
 import { getModelDims } from "@/lib/model";
 import { allowedSets } from "@/lib/access";
-import { buildFactWhereVariants, sumGroupedRows } from "@/lib/fact-filters";
+import { buildFactWhereVariants, sumGroupedRows, MAX_AGGREGATE_RESULT_ROWS } from "@/lib/fact-filters";
 
 const bodySchema = z.object({
   modelId: z.number().int(),
@@ -55,6 +55,15 @@ export async function POST(req: Request) {
   );
   const keyFields = [...rowD.map((_, i) => `r${i}`), ...colD.map((_, i) => `c${i}`)];
   const raw = sumGroupedRows(partials, keyFields);
+  if (raw.length > MAX_AGGREGATE_RESULT_ROWS) {
+    return NextResponse.json(
+      {
+        error: "result_too_large",
+        message: `Sonuç seti çok büyük (${raw.length} hücre, üst sınır: ${MAX_AGGREGATE_RESULT_ROWS}). Lütfen filtre ekleyin.`,
+      },
+      { status: 400 }
+    );
+  }
 
   const tuples = raw.map((row) => ({
     r: rows.map((_, i) => String(row[`r${i}`])),

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { runQuery } from "@/lib/query";
+import { MAX_AGGREGATE_RESULT_ROWS } from "@/lib/fact-filters";
 
 const bodySchema = z.object({
   modelId: z.number().int(),
@@ -21,7 +22,11 @@ export async function POST(req: Request) {
   const { modelId, rowDim, colDim, filters } = parsed.data;
   const result = runQuery(modelId, rowDim, colDim, filters, session.id);
   if ("error" in result) {
-    return NextResponse.json(result, { status: 400 });
+    const message =
+      result.error === "result_too_large"
+        ? `Sonuç seti çok büyük (üst sınır: ${MAX_AGGREGATE_RESULT_ROWS} hücre). Lütfen filtre ekleyin.`
+        : undefined;
+    return NextResponse.json({ ...result, message }, { status: 400 });
   }
   return NextResponse.json(result);
 }

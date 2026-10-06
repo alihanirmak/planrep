@@ -14,6 +14,13 @@ export function chunkArray<T>(arr: T[], size = SQL_IN_CHUNK_SIZE): T[][] {
   return out;
 }
 
+// Pivot/query sonuc kumesinin (satir x sutun aggregate hucre sayisi) ust
+// siniri. Hiyerarsik rollup client-side kuruldugu icin (bkz. lib/pivot.ts,
+// lib/query.ts) kismi/sayfali sonuc dondurmek yanlis toplam uretir; bu yuzden
+// bu sinir asilirsa sonuc kirpilmaz, acik bir hata dondurulur (kullanici
+// filtre eklemeye yonlendirilir).
+export const MAX_AGGREGATE_RESULT_ROWS = 20000;
+
 export type WhereVariant = { sql: string; params: unknown[] };
 
 /**

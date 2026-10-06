@@ -1,7 +1,7 @@
 # PlanRep — Geliştirme Yol Haritası & Takip Listesi
 
 > **Nasıl kullanılır:** Bu dosya yaşayan bir takip listesidir. Bir madde üzerinde çalışmaya başlarken `[ ]` → işe başlandığında yorum/PR linki ekleyin, tamamlandığında `[x]` yapın. Detaylı mimari gerekçeler için `ARCHITECTURE_AUDIT.md`'ye bakın.
-> **Son güncelleme:** 2026-06-10 — Sprint 1.1 tamamlandı (lint borcu, cascade cleanup, IN(...) chunking, N+1 optimizasyonu, Docker, DB yedekleme scripti). Faz 1/2/3 sprintlere bölündü (her sprint 2-8 hafta arası, Faz'ın toplam süresine göre); büyük maddeler artık daha küçük, takip edilebilir parçalar halinde.
+> **Son güncelleme:** 2026-06-10 — Faz 1 (Sprint 1.1 + Sprint 1.2) tamamlandı: lint borcu, cascade cleanup, IN(...) chunking, N+1 optimizasyonu, Docker, DB yedekleme, Postgres geçiş değerlendirmesi, bulk upsert, pivot/query üst sınırı, Vitest test altyapısı. Faz 2/3 sprintlere bölündü (her sprint 2-8 hafta arası, Faz'ın toplam süresine göre); büyük maddeler artık daha küçük, takip edilebilir parçalar halinde.
 
 ---
 
@@ -31,15 +31,15 @@
 
 ### Sprint 1.2 (hafta 3-4) — veri katmanı & test altyapısı
 
-- [ ] Veritabanı geçiş değerlendirmesi: PostgreSQL'e geçiş planı (Drizzle ORM soyutlaması zaten mevcut) veya better-sqlite3 için async wrapper/connection pool
-- [ ] `upsertFacts` (`lib/facts-write.ts`) satır-satır işlemi toplu (bulk) upsert'e çevir
-- [ ] `/api/pivot`, `/api/query` endpoint'lerine satır/sütun üst sınırı + sayfalama ekle
-- [ ] Test altyapısı kurulumu (Vitest/Jest) ve kritik modüller için birim testleri:
-  - [ ] `lib/formula.ts`
-  - [ ] `lib/pivot.ts`
-  - [ ] `lib/access.ts`
-  - [ ] `lib/facts-write.ts`
-  - [ ] `lib/query.ts`
+- [x] Veritabanı geçiş değerlendirmesi: PostgreSQL'e geçiş planı (Drizzle ORM soyutlaması zaten mevcut) veya better-sqlite3 için async wrapper/connection pool — karar: `ARCHITECTURE_AUDIT.md` §6, şimdilik better-sqlite3'te kal, tetikleyici kriterler tanımlandı
+- [x] `upsertFacts` (`lib/facts-write.ts`) satır-satır işlemi toplu (bulk) upsert'e çevir
+- [x] `/api/pivot`, `/api/query` endpoint'lerine satır/sütun üst sınırı + sayfalama ekle
+- [x] Test altyapısı kurulumu (Vitest/Jest) ve kritik modüller için birim testleri:
+  - [x] `lib/formula.ts`
+  - [x] `lib/pivot.ts`
+  - [x] `lib/access.ts`
+  - [x] `lib/facts-write.ts`
+  - [x] `lib/query.ts`
 
 ## Faz 2 — Orta Vade (2-3 ay, 3 sprint × ~3 hafta)
 

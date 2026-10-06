@@ -105,3 +105,31 @@ Detaylı liste → `ROADMAP.md`.
 ## 5. Sonuç
 
 Mimari temel sağlam (dimension-hiyerarşi modeli, pivot/formül motoru, erişim kontrolü iyi tasarlanmış), ancak **ölçeklenebilirlik (senkron SQLite), güvenlik sertleştirme, test/CI altyapısı ve kurumsal planlama iş akışları (approval/workflow, senaryo yönetimi)** eksik — bunlar "demo/POC" seviyesinden "kurumsal production" seviyesine çıkmak için öncelikli boşluklar.
+
+---
+
+## 6. Veritabanı Geçiş Değerlendirmesi (PostgreSQL vs. better-sqlite3) — 2026-06-10
+
+**Soru:** PostgreSQL'e geçiş mi (Drizzle ORM soyutlaması zaten mevcut), yoksa better-sqlite3 için async wrapper/connection pool mu?
+
+**Mevcut durumun analizi:**
+- `better-sqlite3` **tamamen senkron** çalışıyor; her sorgu Node event-loop'unu bloklar. Tek kullanıcı/düşük eşzamanlılıkta (şu anki demo/pilot ölçeği) bu sorun yaratmıyor çünkü sorgular milisaniyeler sürüyor, ama çok kullanıcılı production yükünde (örn. 50+ eşzamanlı planlayıcı aynı anda büyük pivot sorgusu çalıştırırsa) event-loop kilitlenmesi tüm isteklerin kuyruğa girmesine yol açar.
+- `facts` tablosu `d1..d8` sabit kolon (EAV-benzeri) modeli kullanıyor; bu şema **PostgreSQL'e sorunsuz taşınabilir** (aynı DDL, SQLite'a özgü hiçbir sözdizimi yok — `AUTOINCREMENT`→`SERIAL`/`IDENTITY`, `TEXT`/`REAL` tipleri birebir karşılığı var).
+- Drizzle ORM şu an sadece **şema tanımı** için kullanılıyor (`lib/db/schema.ts`); gerçek sorgular ham `sqlite.prepare()` ile yazılmış. Drizzle'ın `drizzle-orm/node-postgres` veya `drizzle-orm/postgres-js` adaptörüne geçiş şema katmanında kolay, ama **tüm `sqlite.prepare(...).all/get/run()` çağrıları** (yaklaşık 30+ dosyada) senkron SQLite API'sine bağımlı; PostgreSQL sürücüleri (örn. `pg`, `postgres`) **asenkron**'dur, yani her çağrı `await` gerektirir — bu, `getModelDims`, `runQuery`, `upsertFacts` gibi senkron imzalı tüm fonksiyonların ve bunları çağıran ~25 API route'unun imzasının `async`'e çevrilmesini gerektiren **geniş kapsamlı bir refactor**.
+- `better-sqlite3`'ün resmi async/connection-pool sarmalayıcısı yok (kütüphane kasıtlı olarak senkron); "async wrapper" demek pratikte `worker_threads` havuzuna sorgu dağıtmak anlamına gelir — bu, WAL modunda tek dosyaya çoklu thread'den yazma karmaşıklığı (lock çakışmaları) getirir ve PostgreSQL'in native sağladığı eşzamanlılık/transaction garantilerini elle yeniden inşa etmek anlamına gelir.
+
+**Karar / öneri:** **Şimdilik better-sqlite3'te kal, PostgreSQL geçişini Faz 2/3'e (gerçek çoklu-kullanıcı production yüküne geçerken) planla.**
+
+Gerekçe:
+1. Mevcut ölçek (pilot/demo, muhtemelen <20 eşzamanlı kullanıcı) için senkron SQLite'ın pratikte bir performans sorunu **gözlenmedi**; erken optimizasyon riski (büyük refactor + regresyon riski) kazanılacak faydadan daha yüksek.
+2. Bu sprint içinde zaten uygulanan **N+1 düzeltmeleri** (`getModelDims`/`getModels`/`/api/dimensions`) ve **toplu (bulk) upsert** (`upsertFacts`) iyileştirmeleri, senkron SQLite'ın pratik darboğazlarının büyük kısmını (sorgu sayısı, round-trip) zaten azaltıyor — PostgreSQL'in asıl getirisi (gerçek eşzamanlı yazma, event-loop'u bloklamama) sadece **gerçek çoklu-kullanıcı production yükünde** ölçülebilir hale gelecek.
+3. Drizzle ORM'in şema soyutlaması zaten var olduğundan, geçiş kararı ileri bir tarihe bırakılsa da **maliyeti artmıyor** — şema tanımı aynı kalır, sadece adaptör (`better-sqlite3` → `postgres-js`) ve çağrı siteleri (`sqlite.prepare` → Drizzle query builder, senkron → async) değişecek.
+4. **Tetikleyici kriter (ne zaman geçilmeli):** Production'da (a) eşzamanlı kullanıcı sayısı ~50'yi aştığında, (b) `facts` tablosu satır sayısı tek SQLite dosyası için pratik sınırı (onlarca milyon satır) zorladığında, veya (c) yatay ölçekleme/okuma replikası gereksinimi doğduğunda, PostgreSQL geçişi öncelikli hale gelmeli.
+
+**Geçiş yapılacaksa izlenecek yol (ileride referans için):**
+1. Drizzle adaptörünü `drizzle-orm/postgres-js` (veya `node-postgres`) ile değiştir, şema dosyasını (`sqlite-core` → `pg-core`) güncelle.
+2. Tüm `sqlite.prepare(...).all/get/run()` çağrılarını Drizzle query builder'a veya `await pool.query(...)`'a taşı; bu, `lib/model.ts`, `lib/query.ts`, `lib/access.ts`, `lib/facts-write.ts` ve ~25 API route'unun **tamamen async zincire** çevrilmesini gerektirir.
+3. `better-sqlite3`'e özgü `sqlite.transaction(() => {...})()` senkron transaction pattern'i yerine PostgreSQL'in `BEGIN/COMMIT` + `await` tabanlı transaction API'sine geçilmeli.
+4. docker-compose.yml'e bir `postgres` servisi eklenmeli; `DATABASE_PATH` env değişkeni `DATABASE_URL`'e dönüşmeli.
+5. Mevcut SQLite verisini taşımak için tek seferlik bir migration scripti (satır satır `SELECT * FROM <tablo>` → `INSERT INTO` PostgreSQL) yazılmalı.
+
