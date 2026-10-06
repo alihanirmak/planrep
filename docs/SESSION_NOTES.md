@@ -195,7 +195,18 @@ Tamamlanan Faz 3 maddeleri (hepsi ayrı commit):
 7. Sprint 3.3 madde 1 — BI export API / REST-OData
 8. Sprint 3.3 madde 2 — Mobil/responsive dashboard + PWA desteği
 
-- Sıradaki: Sprint 3.3 madde 2 için commit + push yapılacak, sonra madde 3
-  (anomali tespiti / AI destekli forecast) için kullanıcıdan onay istenecek.
-  Karmaşık maddeler kullanıcı talebiyle alt-adımlara bölünerek ilerleniyor
-  (timeout riskini azaltmak için).
+- Sprint 3.3 madde 2 commit+push edildi (8f2c927). Madde 3 (anomali tespiti /
+  AI destekli forecast) için plan sunuldu, kullanıcı kapsamın henüz netleşmediğini
+  belirtti → **madde Faz 3'ten çıkarılıp `docs/ROADMAP.md`'deki "Gelecek Yol
+  Haritası (Backlog)" bölümüne taşındı**, bir sprint'e bağlanmadı. Bu haliyle
+  **Faz 3 tamamlandı sayılıyor** (anomali/forecast hariç, bilerek bekletiliyor).
+- Kullanıcıya "bunun dışında ne kaldı" sorusu için Must-Have tablosu güncellendi:
+  madde 4 (optimistic concurrency) tamamlandı olarak işaretlendi (zaten Sprint
+  3.2'de yapılmıştı, tabloda unutulmuştu); madde 7 (CI/CD) kontrol edilip
+  tamamlandı işaretlendi (`.github/workflows/ci.yml` zaten vardı); madde 8
+  (backup) "kısmen tamamlandı" (`scripts/backup-db.js` var, otomatik
+  zamanlama/off-site kopya yok); madde 12 (rate limit + zod tutarlılığı)
+  "kısmen" olarak güncellendi (rate limit sadece 5 kritik endpoint'te,
+  zod 61 route'un 32'sinde). Kalan gerçek açık maddeler: madde 5 (satır-seviyesi
+  güvenlik için ayrı admin UI yok, hâlâ Users sayfasına gömülü) ve madde 12'nin
+  tam kapsaması.
