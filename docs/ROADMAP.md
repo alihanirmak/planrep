@@ -1,7 +1,16 @@
 # PlanRep — Geliştirme Yol Haritası & Takip Listesi
 
 > **Nasıl kullanılır:** Bu dosya yaşayan bir takip listesidir. Bir madde üzerinde çalışmaya başlarken `[ ]` → işe başlandığında yorum/PR linki ekleyin, tamamlandığında `[x]` yapın. Detaylı mimari gerekçeler için `ARCHITECTURE_AUDIT.md`'ye bakın.
-> **Son güncelleme:** 2026-06-10 — Faz 1 (Sprint 1.1 + Sprint 1.2) tamamlandı: lint borcu, cascade cleanup, IN(...) chunking, N+1 optimizasyonu, Docker, DB yedekleme, Postgres geçiş değerlendirmesi, bulk upsert, pivot/query üst sınırı, Vitest test altyapısı. Faz 2 / Sprint 2.1 + Sprint 2.2 tamamlandı: workflow onay akışı (data lock dahil), senaryo kopyalama/karşılaştırma, hücre bazlı audit trail + rollback, formül motoru (IF/SUM/AVG/MIN/MAX + zaman ofseti), iş kuralı (business rule) motoru. Sprint 2.3 kısmen tamamlandı: connector plugin mimarisi (dinamik DB-tabanlı bağlantı yönetimi). Kalan Sprint 2.3 maddeleri (a11y, i18n, bildirim, zamanlanmış sync) ve Faz 3 devam ediyor.
+>
+> **ÇALIŞMA KURALI (2026-06-10'dan itibaren geçerli, bağlayıcı):** Her sprint, içindeki maddeler **tek tek** işlenecek şekilde tasarlanmıştır. Bir sprinte başlandığında:
+> 1. Sprint içindeki **ilk işaretsiz (`[ ]`) madde** seçilir ve yalnızca o madde geliştirilir.
+> 2. Madde tamamlanıp doğrulandığında (ilgili lint/typecheck/test/build çalıştırılır) `[x]` yapılır, kısa bir tamamlama notu eklenir ve **orada durulur**.
+> 3. Aynı sprintin veya fazın diğer maddelerine, kullanıcıdan yeni bir talimat/onay gelmeden **otomatik geçilmez**. Bir sprintin veya fazın tamamı tek seferde/tek oturumda bitirilmeye çalışılmaz.
+> 4. Bu kural hâlihazırda tamamlanmış (Faz 0, Sprint 1.1, Sprint 1.2, Sprint 2.1, Sprint 2.2, Sprint 2.3 madde 1) işler için geriye dönük değildir — sadece bundan sonraki geliştirmeler için geçerlidir.
+>
+> **Son güncelleme:** 2026-06-10 — Faz 1 (Sprint 1.1 + Sprint 1.2) tamamlandı: lint borcu, cascade cleanup, IN(...) chunking, N+1 optimizasyonu, Docker, DB yedekleme, Postgres geçiş değerlendirmesi, bulk upsert, pivot/query üst sınırı, Vitest test altyapısı. Faz 2 / Sprint 2.1 + Sprint 2.2 tamamlandı: workflow onay akışı (data lock dahil), senaryo kopyalama/karşılaştırma, hücre bazlı audit trail + rollback, formül motoru (IF/SUM/AVG/MIN/MAX + zaman ofseti), iş kuralı (business rule) motoru. Sprint 2.3 kısmen tamamlandı: connector plugin mimarisi (dinamik DB-tabanlı bağlantı yönetimi).
+> **Doğrulama turu (2026-06-10, kod değiştirilmedi):** Faz 0, Sprint 1.1, Sprint 2.1 ve Sprint 2.3 madde 1'deki tüm `[x]` işaretli maddeler kaynak kodda tek tek doğrulandı — hepsi gerçekten tam uygulanmış. İki maddede kısmi eksik bulundu: Sprint 1.2 "pivot/query üst sınır+sayfalama" (sayfalama yok, sadece sert limit) ve Sprint 2.2 "formül motoru" (SUMIF yok, sadece SUM var) — bu eksikler aşağıda **Sprint 2.3 (devam)**'a ayrı madde olarak taşındı (artık ilgili eski maddelerin notunda gömülü değil). Ayrıca a11y maddesi için commit edilmemiş kısmi bir çalışma bulundu (`src/lib/a11y.ts` + `MemberPicker`/`DrillModal` entegrasyonu) — bu da aşağıdaki sprintte ayrı bir madde.
+> **Sprint yeniden düzenleme (bu oturum):** Sprint 2.3'ün kalan maddeleri + yukarıdaki iki yarım-kalan teknik borç, tek bir "Sprint 2.3 (devam)" içinde önceliklendirildi (basitten karmaşığa, bağımlılık sırasına göre). Faz 3'ün üç sprinti de kendi içinde basitten karmaşığa / düşük riskliden yüksek riskliye yeniden sıralandı (orijinal sıra mimari bağımlılık/karmaşıklık gözetmiyordu).
 
 ---
 
@@ -33,7 +42,7 @@
 
 - [x] Veritabanı geçiş değerlendirmesi: PostgreSQL'e geçiş planı (Drizzle ORM soyutlaması zaten mevcut) veya better-sqlite3 için async wrapper/connection pool — karar: `ARCHITECTURE_AUDIT.md` §6, şimdilik better-sqlite3'te kal, tetikleyici kriterler tanımlandı
 - [x] `upsertFacts` (`lib/facts-write.ts`) satır-satır işlemi toplu (bulk) upsert'e çevir
-- [x] `/api/pivot`, `/api/query` endpoint'lerine satır/sütun üst sınırı + sayfalama ekle
+- [x] `/api/pivot`, `/api/query` endpoint'lerine satır/sütun üst sınırı ekle — ⚠️ doğrulama (2026-06-10): üst sınır gerçekten var (`fact-filters.ts` `MAX_AGGREGATE_RESULT_ROWS=20000`, aşımda `pivot/route.ts`/`query.ts` `400 result_too_large` döner); **gerçek sayfalama kısmı eksik çıktı, ayrı madde olarak Sprint 2.3 (devam)'a taşındı** (bkz. aşağıda).
 - [x] Test altyapısı kurulumu (Vitest/Jest) ve kritik modüller için birim testleri:
   - [x] `lib/formula.ts`
   - [x] `lib/pivot.ts`
@@ -51,36 +60,45 @@
 ### Sprint 2.2 — Audit, formül motoru & iş kuralları
 
 - [x] Cell-level audit trail görünümü + rollback (undo) mekanizması
-- [x] Formül motoruna gelişmiş fonksiyonlar: `IF`, `SUMIF`, zaman-serisi ofseti (`[ACCOUNT].PY`, `MOVAVG`)
+- [x] Formül motoruna gelişmiş fonksiyonlar: `IF`, zaman-serisi ofseti (`[ACCOUNT].PY`, `MOVAVG`) — ⚠️ doğrulama (2026-06-10): `IF`/`SUM`/`AVG`/`MIN`/`MAX` ve `.PY`/`.MOVAVG(n)` gerçekten çalışıyor (`lib/formula.ts`, `lib/time-offset.ts`); **`SUMIF` implemente edilmemiş çıktı, ayrı madde olarak Sprint 2.3 (devam)'a taşındı** (bkz. aşağıda).
 - [x] İş kuralı (business rule) motoru — örn. "Bütçe negatif olamaz" tipi validasyonlar
 
 ### Sprint 2.3 — Entegrasyon, erişilebilirlik & bildirimler
 
 - [x] Connector plugin mimarisi (DB'de connector config, dinamik kayıt — statik dizi yerine)
-- [ ] Erişilebilirlik (a11y) iyileştirmeleri: ARIA attribute'ları, modal focus-trap/ESC, klavye navigasyonu (`MemberPicker`, `DrillModal`, drag-and-drop alanları)
-- [ ] i18n'i tam kapsama al (export dosyaları — PPTX/Excel başlık/etiketler, tüm hata mesajları)
-- [ ] Bildirim sistemi (yorum/mention, onay bekleyen görev — en azından in-app, sonra e-posta)
-- [ ] Zamanlanmış veri yenileme (cron/webhook ile SAP OData senkronizasyonu)
+
+#### Sprint 2.3 (devam) — kalan + yarım kalan maddeler (⚠️ tek tek işlenecek, bkz. yukarıdaki ÇALIŞMA KURALI)
+
+> Sıralama: önce commit'e girmemiş/yarım kalan küçük teknik borçlar (1-3), sonra orijinal Sprint 2.3'ün kalan 3 maddesi orijinal sırasıyla (4-6).
+
+1. [ ] a11y iyileştirmelerini bitir ve commit'e al — `src/lib/a11y.ts` (`useEscapeKey`/`useFocusTrap`) ile `MemberPicker`/`DrillModal` entegrasyonu zaten yazılmış ama commit'e girmemiş (`git status`); kalan iş: drag-and-drop alanlarına (`reports/page.tsx`, `dashboards/page.tsx`) klavye eşdeğeri eklemek, sonra commit.
+2. [ ] Formül motoruna `SUMIF` ekle — `lib/formula.ts`'e `SUMIF(aralık;koşul)` fonksiyonu (Sprint 2.2'den kalan tek eksik parça).
+3. [ ] `/api/pivot`, `/api/query`'ye gerçek sayfalama ekle — şu an sert üst sınır (`400 result_too_large`) var ama page/pageSize tabanlı gerçek sayfalama yok (Sprint 1.2'den kalan).
+4. [ ] i18n'i tam kapsama al — export dosyaları (PPTX/Excel başlık/etiketler) ve tüm hata mesajları `getT()` üzerinden çözülecek şekilde güncellenmeli.
+5. [ ] Bildirim sistemi (yorum/mention, onay bekleyen görev) — en azından in-app, sonra e-posta.
+6. [ ] Zamanlanmış veri yenileme (cron/webhook ile SAP OData senkronizasyonu).
 
 ## Faz 3 — Uzun Vade (3-6 ay, 3 sprint × ~6-8 hafta)
 
-### Sprint 3.1 — Çoklu-tenant & kimlik
+> **Not:** Aşağıdaki 3 sprintin madde sırası, bu oturumda basitten karmaşığa / düşük riskliden yüksek riskliye göre yeniden düzenlendi (orijinal sıra mimari bağımlılık/karmaşıklık gözetmiyordu). Her sprint kendi içinde yukarıdaki ÇALIŞMA KURALI'na göre tek tek işlenecek.
 
-- [ ] Çoklu-tenant / organizasyon desteği
-- [ ] SSO entegrasyonu (SAML/OAuth2/Okta/Azure AD)
-- [ ] 2FA desteği
+### Sprint 3.1 — Kimlik & çoklu-tenant
+
+1. [ ] 2FA desteği — kullanıcı başına TOTP secret + login'de doğrulama; kendi içinde kapalı, şema/erişim modelini geniş çaplı etkilemiyor (grubun en basiti).
+2. [ ] SSO entegrasyonu (SAML/OAuth2/Okta/Azure AD) — harici IdP ile login akışı + otomatik kullanıcı provisioning; 2FA'dan sonra orta karmaşıklık.
+3. [ ] Çoklu-tenant / organizasyon desteği — tüm tablolara `tenant_id`, tüm sorgu/route/erişim kontrolü katmanının gözden geçirilmesi; en mimari-invaziv iş, bu grupta en sona bırakıldı.
 
 ### Sprint 3.2 — Gerçek zamanlı & performans
 
-- [ ] Gerçek zamanlı collaboration (WebSocket, eşzamanlı düzenleme kilidi/optimistic concurrency)
-- [ ] Sunucu taraflı caching (Redis) katmanı
-- [ ] Büyük pivot tabloları için sanal kaydırma (virtualized grid — `PivotGrid.tsx`)
+1. [ ] Büyük pivot tabloları için sanal kaydırma (virtualized grid — `PivotGrid.tsx`) — sadece frontend, backend bağımlılığı yok; grubun en basiti.
+2. [ ] Sunucu taraflı caching (Redis) katmanı — altyapı eklentisi, mevcut sorgulara cache katmanı; virtualized grid'den sonra.
+3. [ ] Gerçek zamanlı collaboration (WebSocket, eşzamanlı düzenleme kilidi/optimistic concurrency) — grubun en karmaşığı (concurrency/conflict yönetimi), Redis katmanı hazır olduktan sonra yapılması daha kolay.
 
 ### Sprint 3.3 — AI, mobil & dış entegrasyon
 
-- [ ] Anomali tespiti / AI destekli öngörü (forecast) modülü
-- [ ] Mobil/responsive dashboard, PWA desteği
-- [ ] Harici BI araçlarına veri köprüsü (REST/OData export API — Power BI/Tableau bağlantısı)
+1. [ ] Harici BI araçlarına veri köprüsü (REST/OData export API — Power BI/Tableau bağlantısı) — kendi içinde kapalı, yeni bir API yüzeyi eklemek; grubun en basiti.
+2. [ ] Mobil/responsive dashboard, PWA desteği — orta karmaşıklıkta frontend işi.
+3. [ ] Anomali tespiti / AI destekli öngörü (forecast) modülü — veri bilimi/model bağımlılığı olan en karmaşık/riskli iş, bu grupta en sona bırakıldı.
 
 
 ---
@@ -100,7 +118,7 @@
 | 7 | Test altyapısı + CI/CD + versiyon kontrolü | Üretim güvenilirliği için olmazsa olmaz | — | Faz 0/1 |
 | 8 | Yedekleme/Disaster Recovery stratejisi | Tek SQLite dosyası, yedekleme yok | — | Faz 1 |
 | 9 | Bildirim sistemi (yorum/mention, onay bekleyen görev) | Yorum var, bildirim/mail yok | Tüm BI araçları | Faz 2 |
-| 10 | Gelişmiş formül fonksiyonları (IF, SUMIF, zaman-ofseti) | **Tamamlandı (Sprint 2.2)** | Excel, Anaplan formula engine | Faz 2 |
+| 10 | Gelişmiş formül fonksiyonları (IF, SUMIF, zaman-ofseti) | **Kısmen tamamlandı (Sprint 2.2):** IF/SUM/AVG/MIN/MAX + zaman-ofseti çalışıyor, SUMIF eksik (Sprint 2.3 devam) | Excel, Anaplan formula engine | Faz 2 |
 | 11 | Veri doğrulama / business rules | **Tamamlandı (Sprint 2.2)** | Tüm EPM araçları | Faz 2 |
 | 12 | API rate limiting + input sanitization tutarlılığı | Güvenlik borcu | — | Faz 0 |
 

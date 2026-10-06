@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
+import { useEscapeKey, useFocusTrap } from "@/lib/a11y";
 
 type FactRow = Record<string, string | number | null> & {
   id: number;
@@ -28,6 +29,10 @@ export default function DrillModal({
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
   const pageSize = 25;
+  const titleId = useId();
+  const panelRef = useFocusTrap<HTMLDivElement>(true);
+
+  useEscapeKey(onClose, true);
 
   const load = useCallback(
     (p: number) => {
@@ -58,15 +63,19 @@ export default function DrillModal({
       onClick={onClose}
     >
       <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
         className="max-h-[80vh] w-full max-w-4xl overflow-hidden rounded-xl bg-white shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center border-b border-slate-100 px-5 py-3">
           <div>
-            <h3 className="text-sm font-semibold text-slate-800">🔍 Detay Kayıtları</h3>
+            <h3 id={titleId} className="text-sm font-semibold text-slate-800">🔍 Detay Kayıtları</h3>
             <div className="text-xs text-slate-400">{title}</div>
           </div>
-          <button onClick={onClose} className="ml-auto text-slate-400 hover:text-slate-700">
+          <button type="button" onClick={onClose} aria-label="Kapat" className="ml-auto text-slate-400 hover:text-slate-700">
             ✕
           </button>
         </div>
@@ -117,6 +126,7 @@ export default function DrillModal({
           Toplam {total} kayıt
           <div className="ml-auto flex gap-2">
             <button
+              type="button"
               disabled={page === 0}
               onClick={() => load(page - 1)}
               className="rounded border border-slate-200 px-2 py-1 disabled:opacity-40"
@@ -127,6 +137,7 @@ export default function DrillModal({
               {page + 1} / {Math.max(1, Math.ceil(total / pageSize))}
             </span>
             <button
+              type="button"
               disabled={(page + 1) * pageSize >= total}
               onClick={() => load(page + 1)}
               className="rounded border border-slate-200 px-2 py-1 disabled:opacity-40"

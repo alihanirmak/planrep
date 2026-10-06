@@ -405,7 +405,7 @@ export default function DashboardsPage() {
         </div>
       ) : (
         <div className="mt-6 grid gap-4 lg:grid-cols-2">
-          {widgets.map((w) => (
+          {widgets.map((w, idx) => (
             <div
               key={w.id}
               className={w.w === 2 ? "lg:col-span-2" : ""}
@@ -424,6 +424,10 @@ export default function DashboardsPage() {
                   isMine
                     ? () => setWidgets(widgets.map((x) => (x.id === w.id ? { ...x, w: x.w === 2 ? 1 : 2 } : x)))
                     : undefined
+                }
+                onMoveLeft={isMine && idx > 0 ? () => moveWidget(w.id, widgets[idx - 1].id) : undefined}
+                onMoveRight={
+                  isMine && idx < widgets.length - 1 ? () => moveWidget(widgets[idx + 1].id, w.id) : undefined
                 }
                 dragHandleProps={
                   isMine

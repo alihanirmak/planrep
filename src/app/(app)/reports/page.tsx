@@ -46,6 +46,13 @@ const STYLE_LABEL: Array<[CondRule["style"], string]> = [
 
 type Zone = "rows" | "cols" | "unused";
 
+const ZONE_ORDER: Zone[] = ["unused", "rows", "cols"];
+const ZONE_LABELS: Record<Zone, string> = {
+  rows: "Satırlar",
+  cols: "Sütunlar",
+  unused: "Kullanılmayan",
+};
+
 // Sag paneldeki katlanir bolum
 function Section({
   title,
@@ -80,18 +87,49 @@ function DimChip({
   code,
   zone,
   dims,
+  items,
   onMove,
 }: {
   code: string;
   zone: Zone;
   dims: Dim[];
+  items: string[];
   onMove: (code: string, to: Zone, beforeCode?: string) => void;
 }) {
   const dim = dims.find((d) => d.code === code);
   if (!dim) return null;
+  const idx = items.indexOf(code);
+
+  // Klavye eşdeğeri (a11y): fare ile sürükleme olmadan da taşıma yapılabilsin.
+  // ↑/↓ aynı bölge içinde sıralamayı değiştirir, ←/→ bölgeler arası taşır.
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+      if (items.length < 2) return;
+      e.preventDefault();
+      if (e.key === "ArrowUp" && idx > 0) {
+        onMove(code, zone, items[idx - 1]);
+      } else if (e.key === "ArrowDown" && idx < items.length - 1) {
+        onMove(code, zone, items[idx + 2]);
+      }
+      return;
+    }
+    if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+      e.preventDefault();
+      const zoneIdx = ZONE_ORDER.indexOf(zone);
+      const delta = e.key === "ArrowRight" ? 1 : -1;
+      const nextZone = ZONE_ORDER[(zoneIdx + delta + ZONE_ORDER.length) % ZONE_ORDER.length];
+      onMove(code, nextZone);
+    }
+  }
+
   return (
     <span
       draggable
+      tabIndex={0}
+      role="button"
+      aria-roledescription="sürüklenebilir boyut"
+      aria-label={`${dim.name}, ${ZONE_LABELS[zone]} bölgesinde, konum ${idx + 1}/${items.length}. Taşımak için ok tuşlarını kullanın.`}
+      onKeyDown={handleKeyDown}
       onDragStart={(e) => e.dataTransfer.setData("text/plain", code)}
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => {
@@ -100,8 +138,8 @@ function DimChip({
         const dragged = e.dataTransfer.getData("text/plain");
         if (dragged && dragged !== code) onMove(dragged, zone, code);
       }}
-      className="flex cursor-grab select-none items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-700 shadow-sm hover:border-blue-400 active:cursor-grabbing"
-      title="Sürükleyerek taşı"
+      className="flex cursor-grab select-none items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-700 shadow-sm hover:border-blue-400 active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+      title="Sürükle veya odaklanıp ok tuşlarıyla taşı"
     >
       <span className="text-slate-300">⠿</span> {dim.name}
     </span>
@@ -136,7 +174,7 @@ function DropZone({
       <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label}</div>
       <div className="flex flex-col gap-1.5">
         {items.map((c) => (
-          <DimChip key={c} code={c} zone={zone} dims={dims} onMove={onMove} />
+          <DimChip key={c} code={c} zone={zone} dims={dims} items={items} onMove={onMove} />
         ))}
         {items.length === 0 && <span className="py-1 text-center text-xs text-slate-300">{hint}</span>}
       </div>

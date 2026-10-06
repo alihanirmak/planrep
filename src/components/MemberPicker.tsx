@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { Member } from "@/lib/pivot";
+import { useEscapeKey, useFocusTrap } from "@/lib/a11y";
 
 // Cok secimli, aramali uye secici (acilir panel)
 export default function MemberPicker({
@@ -20,6 +21,11 @@ export default function MemberPicker({
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const ref = useRef<HTMLDivElement>(null);
+  const panelRef = useFocusTrap<HTMLDivElement>(open);
+  const listboxId = useId();
+  const buttonId = useId();
+
+  useEscapeKey(() => setOpen(false), open);
 
   useEffect(() => {
     function onDoc(e: MouseEvent) {
@@ -71,6 +77,11 @@ export default function MemberPicker({
   return (
     <div ref={ref} className="relative">
       <button
+        id={buttonId}
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={open ? listboxId : undefined}
         onClick={() => setOpen(!open)}
         className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm ${
           selected.length > 0
@@ -80,23 +91,30 @@ export default function MemberPicker({
       >
         {badge && <span className="text-xs text-slate-400">{badge}</span>}
         <span className="font-medium">{label}:</span> {summary}
-        <span className="text-xs text-slate-400">▾</span>
+        <span className="text-xs text-slate-400" aria-hidden="true">▾</span>
       </button>
       {open && (
-        <div className="absolute z-30 mt-1 max-h-80 w-72 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl">
+        <div
+          ref={panelRef}
+          role="dialog"
+          aria-label={`${label} seçimi`}
+          className="absolute z-30 mt-1 max-h-80 w-72 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl"
+        >
           <div className="border-b border-slate-100 p-2">
             <input
               autoFocus
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Ara..."
+              aria-label={`${label} içinde ara`}
               className="w-full rounded border border-slate-200 px-2 py-1 text-sm text-slate-900"
             />
             <div className="mt-1 flex gap-2 text-xs">
-              <button onClick={() => onChange([])} className="text-blue-600 hover:underline">
+              <button type="button" onClick={() => onChange([])} className="text-blue-600 hover:underline">
                 Temizle (Tümü)
               </button>
               <button
+                type="button"
                 onClick={() => onChange(filtered.map((m) => m.code))}
                 className="text-blue-600 hover:underline"
               >
@@ -104,10 +122,12 @@ export default function MemberPicker({
               </button>
             </div>
           </div>
-          <div className="max-h-60 overflow-y-auto p-1">
+          <div id={listboxId} role="listbox" aria-multiselectable="true" aria-labelledby={buttonId} className="max-h-60 overflow-y-auto p-1">
             {filtered.map((m) => (
               <label
                 key={m.id}
+                role="option"
+                aria-selected={selSet.has(m.code)}
                 className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm text-slate-700 hover:bg-slate-50"
                 style={{ paddingLeft: 8 + (search ? 0 : (depthOf.get(m.id) ?? 0) * 14) }}
               >

@@ -86,12 +86,16 @@ export default function DashboardWidget({
   widget,
   onRemove,
   onWiden,
+  onMoveLeft,
+  onMoveRight,
   extraFilters,
   dragHandleProps,
 }: {
   widget: Widget;
   onRemove?: () => void;
   onWiden?: () => void;
+  onMoveLeft?: () => void;
+  onMoveRight?: () => void;
   extraFilters?: Record<string, string[]>;
   dragHandleProps?: React.HTMLAttributes<HTMLDivElement>;
 }) {
@@ -136,6 +140,28 @@ export default function DashboardWidget({
           {dragHandleProps ? "⠿ " : ""}
           {widget.title}
         </h3>
+        {(onMoveLeft || onMoveRight) && (
+          <span className="ml-auto flex items-center gap-1">
+            <button
+              onClick={onMoveLeft}
+              disabled={!onMoveLeft}
+              className="text-xs text-slate-300 hover:text-blue-500 disabled:opacity-30 disabled:hover:text-slate-300"
+              title="Widget'ı sola taşı"
+              aria-label="Widget'ı sola taşı"
+            >
+              ◀
+            </button>
+            <button
+              onClick={onMoveRight}
+              disabled={!onMoveRight}
+              className="text-xs text-slate-300 hover:text-blue-500 disabled:opacity-30 disabled:hover:text-slate-300"
+              title="Widget'ı sağa taşı"
+              aria-label="Widget'ı sağa taşı"
+            >
+              ▶
+            </button>
+          </span>
+        )}
         {onWiden && (
           <button
             onClick={onWiden}
