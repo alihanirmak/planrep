@@ -75,7 +75,7 @@
 2. [x] Formül motoruna `SUMIF` ekle — `lib/formula.ts`'e `SUMIF(aralık;koşul)` fonksiyonu (Sprint 2.2'den kalan tek eksik parça). — ✅ tamamlandı (2026-06-10, commit `347d0ae`): `SUMIF(kosul1;deger1;kosul2;deger2;...)` eklendi — bu DSL'de "range" kavramı olmadığından (formüller tek satırın skalar kolon değerleri üzerinde çalışır), Excel SUMIF'in bu modele uyarlanmış karşılığı kosul/değer ikilileri şeklinde tasarlandı. 11 yeni test (toplam 123). Lint/typecheck/build temiz.
 3. [x] `/api/pivot`, `/api/query`'ye gerçek sayfalama ekle — şu an sert üst sınır (`400 result_too_large`) var ama page/pageSize tabanlı gerçek sayfalama yok (Sprint 1.2'den kalan). — ✅ tamamlandı (2026-06-10, commit `c35e04c`): `lib/model.ts`'e `rootMembers()` eklendi; `runQuery`/`/api/pivot` route'una opsiyonel `page`/`pageSize` parametresi eklendi — ilk satır boyutunun kök üyeleri sayfalanır, her sayfaya seçilen kök üyenin TÜM alt ağacı dahil edilerek rollup toplamları her zaman doğru hesaplanır (colTotals/grandTotal sadece o sayfanın verisini yansıtır, dokümante edilmiş tutarlı bir semantik). Parametre verilmezse davranış tamamen eskisiyle aynı (geriye dönük uyumlu, mevcut çağıranlar etkilenmedi). 5 yeni test (toplam 128). Lint/typecheck/build temiz.
 4. [x] i18n'i tam kapsama al — export dosyaları (PPTX/Excel başlık/etiketler) ve tüm hata mesajları `getT()` üzerinden çözülecek şekilde güncellenmeli. — ✅ tamamlandı (2026-06-10, commit `2cdd86c`): `lib/i18n-server.ts` (sunucu tarafı locale çözümleme — `next/headers` client component'leri bozmasın diye ayrı dosyada), `formatT()`/`intlLocale()` eklendi. Excel/PPTX export'taki "Genel Toplam"/"Rapor" ve PPTX'in sabit `tr-TR` sayı/tarih formatı artık oturum locale'ine göre; 9 API route'taki kullanıcıya doğrudan gösterilen hardcoded Türkçe `message` alanları (pivot/query sonuç-çok-büyük, workflow, facts, members, models, dimensions, ai/query, integrations) i18n'e taşındı. 9 yeni test (toplam 137). Lint/typecheck/build temiz. Not: makine-okunur `error` kodları (örn. `"unauthorized"`) kapsam dışı — sadece kullanıcıya gösterilen metinler kapsandı.
-5. [ ] Bildirim sistemi (yorum/mention, onay bekleyen görev) — en azından in-app, sonra e-posta.
+5. [x] Bildirim sistemi (yorum/mention, onay bekleyen görev) — en azından in-app, sonra e-posta. — ✅ tamamlandı (2026-06-10, commit `60fc6fd`): `notifications` tablosu + `lib/notifications.ts` (CRUD, bulk create, `resolveMentionedUserIds` ile Unicode-aware @mention çözümleme). Tetikleyiciler: yorum → entity sahibi + mention edilenler; workflow submit/approve/reject → onaylayan/sahip. `NotificationBell` komponenti (Sidebar'da zil ikonu, 30sn polling, dropdown liste, "tümünü okundu yap", a11y: focus-trap+ESC). Bildirim metinleri `notif.*` i18n anahtarları üzerinden gösterim anında alıcının locale'ine göre render ediliyor. `/reports`/`/dashboards`'a `?id=` deep-link desteği eklendi ki bildirim linkleri gerçekten bir şeye gitsin. E-posta kapsam dışı bırakıldı (madde metninde "sonra e-posta" olarak zaten ayrılmıştı) — ileride ayrı bir iş olarak ele alınabilir. 16 yeni test (toplam 153). Lint/typecheck/build temiz.
 6. [ ] Zamanlanmış veri yenileme (cron/webhook ile SAP OData senkronizasyonu).
 
 ## Faz 3 — Uzun Vade (3-6 ay, 3 sprint × ~6-8 hafta)
@@ -117,7 +117,7 @@
 | 6 | Zamanlanmış/otomatik SAP senkronizasyonu | Şu an manuel preview/import | Power BI "scheduled refresh" | Faz 2 |
 | 7 | Test altyapısı + CI/CD + versiyon kontrolü | Üretim güvenilirliği için olmazsa olmaz | — | Faz 0/1 |
 | 8 | Yedekleme/Disaster Recovery stratejisi | Tek SQLite dosyası, yedekleme yok | — | Faz 1 |
-| 9 | Bildirim sistemi (yorum/mention, onay bekleyen görev) | Yorum var, bildirim/mail yok | Tüm BI araçları | Faz 2 |
+| 9 | Bildirim sistemi (yorum/mention, onay bekleyen görev) | **Tamamlandı (Sprint 2.3 devam, in-app)** — e-posta kapsam dışı | Tüm BI araçları | Faz 2 |
 | 10 | Gelişmiş formül fonksiyonları (IF, SUMIF, zaman-ofseti) | **Tamamlandı (Sprint 2.2 + 2.3 devam)** | Excel, Anaplan formula engine | Faz 2 |
 | 11 | Veri doğrulama / business rules | **Tamamlandı (Sprint 2.2)** | Tüm EPM araçları | Faz 2 |
 | 12 | API rate limiting + input sanitization tutarlılığı | Güvenlik borcu | — | Faz 0 |
@@ -128,7 +128,7 @@
 |---|---|---|
 | Raporlama | Çapraz-sekme grafiklerini PDF export, zamanlanmış rapor e-postası, rapor şablon kütüphanesi | 2-3 |
 | Dashboard | Sürükle-bırak grid layout, gerçek zamanlı widget yenileme, mobil responsive görünüm | 3 |
-| Collaboration | @mention bildirimleri, canlı imleç (Figma-style), değişiklik geçmişi diff görünümü | 3 |
+| Collaboration | @mention bildirimleri (**Tamamlandı — Sprint 2.3 devam**), canlı imleç (Figma-style), değişiklik geçmişi diff görünümü | 3 |
 | AI | Doğal dil ile veri yazma ("Ocak bütçesini %5 artır"), anomali tespiti, çoklu dil NLP | 3 |
 | Entegrasyon | Dinamik connector plugin, OAuth2/SAML SSO, genel REST API, webhook tetikleyiciler | 2-3 |
 | Performans | Redis caching, PostgreSQL + read-replica, sanal kaydırma (virtualized grid) | 1-3 |
