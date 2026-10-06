@@ -144,7 +144,7 @@ Sprint 3.1/3.2/3.3'ün diğer tüm maddeleri tamamlandı — **Faz 3 bu haliyle 
 | AI | Doğal dil ile veri yazma ("Ocak bütçesini %5 artır"), anomali tespiti, çoklu dil NLP | 3 |
 | Entegrasyon | Dinamik connector plugin, OAuth2/SAML SSO, genel REST API, webhook tetikleyiciler | 2-3 |
 | Performans | Redis caching, PostgreSQL + read-replica, sanal kaydırma (virtualized grid) | 1-3 |
-| UX | Dark mode, klavye kısayolları, hücre düzeyinde undo/redo (Ctrl+Z), PWA/offline-first | 2-3 |
+| UX | Dark mode, ~~klavye kısayolları~~ (**Tamamlandı — 2026-06-10**), hücre düzeyinde undo/redo (Ctrl+Z), PWA/offline-first (**Tamamlandı — Sprint 3.3**) | 2-3 |
 | Güvenlik | 2FA, SSO/Okta/Azure AD, IP allowlist, refresh token yönetimi | 3 |
 | DevOps | Dockerfile + docker-compose, GitHub Actions CI, otomatik DB migration genişletmesi (Drizzle Kit) | 0-1 |
 
@@ -183,6 +183,15 @@ Sprint 3.1/3.2/3.3'ün diğer tüm maddeleri tamamlandı — **Faz 3 bu haliyle 
 - **Kod tekrarının giderilmesi:** `admin/users/page.tsx`'teki satır-içi erişim düzenleme paneli `components/DataAccessEditor.tsx`'e çıkarıldı (reusable component) — hem eski sayfa hem yeni sayfa aynı bileşeni kullanıyor, davranış değişmedi.
 - **Yeni `/admin/access` sayfası (asıl özellik):** kullanıcı × boyut matrisi — her hücre "Tüm" (kısıtsız) veya "N üye" (kısıtlı) rozeti gösterir, tıklanınca o kullanıcı için `DataAccessEditor` paneli açılır (TÜM boyutları birden gösterir, kaydet full-replace ile çalışır). Arama kutusu (ad/e-posta) + "sadece kısıtlı kullanıcılar" filtresi eklendi — büyük kullanıcı listelerinde denetim/triage için. `admin/users/page.tsx`'e bu sayfaya giden bir üst-bar linki eklendi. Nav (`Sidebar.tsx`) + i18n (`access.*`, `nav.access`) güncellendi.
 - 2 yeni test (`access.test.ts` → `getTenantAccessEntries`: tenant izolasyonu + boş tenant) — toplam **288 test**. Gerçek `next dev` sunucusuna karşı manuel smoke test: login → `/api/access` (boş) → `/api/users/2/access` PUT ile kısıtlama ekle → `/api/access`'te anında göründüğü doğrulandı → `/admin/access` sayfası 200 render etti → test verisi geri alındı. Lint/typecheck/build hepsi temiz.
+
+### Nice-to-Have — Klavye kısayolları tamamlama notu (2026-06-10)
+
+- **Önce tespit edilen durum:** projede hiç Ctrl/Cmd klavye kısayolu altyapısı yoktu (sadece Escape/Tab-trap vardı, `lib/a11y.ts`); tek emsal `reports/page.tsx`'teki yerel ok-tuşu boyut sıralama kodu.
+- **Mimari karar — command palette + sabit sayıda sayfa-özel kısayol, "g sonra r" gibi iki-tuşlu diziler DEĞİL:** GitHub tarzı sıralı kısayollar (önce "g", sonra "r") durum makinesi + zaman aşımı gerektirir, test edilmesi ve a11y açısından doğrulanması daha zordur. Onun yerine tek bir **Ctrl/Cmd+K komut paleti** (`components/CommandPalette.tsx`) eklendi — Sidebar'daki `NAV` listesini arama kutusuyla filtreler, ok tuşlarıyla gezinilir, Enter ile gidilir; aynı ihtiyacı (hızlı sayfa geçişi) daha keşfedilebilir şekilde karşılar.
+- **Yeni `lib/shortcuts.ts`:** `matchesHotkey` (saf, test edilebilir eşleştirme fonksiyonu) + `useHotkey(spec, handler, enabled)` hook'u — `lib/a11y.ts`'teki "`use client` hook + `document`-seviyesi `keydown` dinleyici" deseniyle aynı. Kural: mod'lu kısayollar (Ctrl/Cmd+S gibi) her zaman tetiklenir; mod'suz düz tuş kısayolları (`?` gibi) bir input/textarea/select/contenteditable'a yazı yazılırken KASITLI OLARAK tetiklenmez (`isEditableTarget` koruması) — arama kutusuna "?" yazarken yardım penceresinin açılmasını önlemek için.
+- **Eklenen kısayollar:** `Ctrl/Cmd+K` → komut paleti (`Sidebar.tsx`, tüm sayfalarda global), `?` → kısayol yardım penceresi (`ShortcutsHelpModal.tsx`, statik liste), `Ctrl/Cmd+S` → kaydet (`reports/page.tsx` ve `dashboards/page.tsx`'teki mevcut `save()` fonksiyonlarına bağlandı, yeni bir kaydetme yolu eklenmedi), `Ctrl/Cmd+Enter` → raporu çalıştır (`reports/page.tsx`'teki mevcut `run()`'a bağlandı). Sidebar alt bilgi alanına "⌨️ Klavye Kısayolları" butonu eklendi (keşfedilebilirlik için, tıklama veya `?` ile açılır).
+- **React Compiler lint notu:** `CommandPalette.tsx`'te ilk taslak sorgu değiştiğinde seçili indeksi sıfırlamak için bir `useEffect` içinde `setActiveIndex(0)` çağırıyordu — React Compiler'ın "effect içinde senkron setState" kuralı tarafından reddedildi (bkz. `virtualize`/`Sidebar` lint geçmişindeki benzer kararlar). Çözüm: effect kaldırıldı, seçili indeks render sırasında `Math.min(activeIndex, filtered.length - 1)` ile türetildi (`safeActiveIndex`), sıfırlama arama kutusunun `onChange` olay işleyicisinde doğrudan yapılıyor.
+- 6 yeni test (`shortcuts.test.ts` → `matchesHotkey` kombinasyonları + `isEditableTarget`'ın DOM'suz ortamda güvenli davranışı) — toplam **294 test**. Gerçek `next dev` sunucusuna karşı manuel doğrulama: login → `/reports` sayfası 200 render etti, sidebar'daki kısayol butonu metni sayfada mevcut. Lint/typecheck/build hepsi temiz.
 
 ### Sprint 2.1 tamamlama notu (2026-06-10)
 

@@ -198,6 +198,15 @@ const tr = {
   "access.editButton": "Düzenle",
   "access.empty": "Kullanıcı bulunamadı",
   "access.editorHint": "Boş bırakılan boyut = tam erişim. Seçim yapılan boyutta kullanıcı yalnızca seçilen üyeleri (ve altlarını) görür/yazar.",
+  "palette.title": "Hızlı Git",
+  "palette.placeholder": "Sayfa ara... (örn. raporlar)",
+  "palette.empty": "Sonuç bulunamadı",
+  "shortcuts.title": "Klavye Kısayolları",
+  "shortcuts.palette": "Hızlı git panelini aç",
+  "shortcuts.save": "Kaydet",
+  "shortcuts.run": "Çalıştır",
+  "shortcuts.closeDialog": "Diyaloğu/paneli kapat",
+  "shortcuts.openHelp": "Bu listeyi aç",
 } as const;
 
 const en: Record<keyof typeof tr, string> = {
@@ -396,6 +405,15 @@ const en: Record<keyof typeof tr, string> = {
   "access.editButton": "Edit",
   "access.empty": "No users found",
   "access.editorHint": "An empty dimension selection means full access. For a selected dimension the user only sees/writes the chosen members (and descendants).",
+  "palette.title": "Quick Jump",
+  "palette.placeholder": "Search a page... (e.g. reports)",
+  "palette.empty": "No results found",
+  "shortcuts.title": "Keyboard Shortcuts",
+  "shortcuts.palette": "Open quick jump panel",
+  "shortcuts.save": "Save",
+  "shortcuts.run": "Run",
+  "shortcuts.closeDialog": "Close dialog/panel",
+  "shortcuts.openHelp": "Open this list",
 };
 
 export type TKey = keyof typeof tr;

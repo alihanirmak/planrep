@@ -2,11 +2,14 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { getT, LOCALE_COOKIE, type Locale, type TKey } from "@/lib/i18n";
 import type { SessionUser } from "@/lib/session";
 import { useEscapeKey, useFocusTrap } from "@/lib/a11y";
+import { useHotkey } from "@/lib/shortcuts";
 import NotificationBell from "./NotificationBell";
+import CommandPalette from "./CommandPalette";
+import ShortcutsHelpModal from "./ShortcutsHelpModal";
 
 const NAV: Array<{ href: string; key: TKey; icon: string; adminOnly?: boolean }> = [
   { href: "/", key: "nav.home", icon: "🏠" },
@@ -50,6 +53,21 @@ export default function Sidebar({
   const [open, setOpen] = useState(false);
   useEscapeKey(() => setOpen(false), open);
   const drawerRef = useFocusTrap<HTMLDivElement>(open);
+
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  useHotkey({ key: "k", mod: true }, () => setPaletteOpen(true), !helpOpen);
+  useHotkey({ key: "?" }, () => setHelpOpen(true), !paletteOpen);
+
+  const paletteItems = useMemo(
+    () =>
+      NAV.filter((n) => !n.adminOnly || user.role === "admin").map((n) => ({
+        href: n.href,
+        label: t(n.key),
+        icon: n.icon,
+      })),
+    [t, user.role]
+  );
 
   function switchLocale(next: Locale) {
     setLocaleCookie(next);
@@ -173,8 +191,20 @@ export default function Sidebar({
               {t("logout")} ↪
             </button>
           </div>
+          <button
+            onClick={() => setHelpOpen(true)}
+            className="mt-3 flex w-full items-center justify-between rounded-lg bg-slate-800 px-2 py-1.5 text-xs text-slate-400 hover:text-white"
+          >
+            <span>⌨️ {t("shortcuts.title")}</span>
+            <kbd className="rounded border border-slate-700 px-1.5 py-0.5 font-mono">?</kbd>
+          </button>
         </div>
       </aside>
+
+      {paletteOpen && (
+        <CommandPalette items={paletteItems} t={t} onClose={() => setPaletteOpen(false)} />
+      )}
+      {helpOpen && <ShortcutsHelpModal t={t} onClose={() => setHelpOpen(false)} />}
     </>
   );
 }

@@ -240,4 +240,18 @@ Tamamlanan Faz 3 maddeleri (hepsi ayrı commit):
   (`access.*`) eklendi. 2 yeni test — toplam **288 test**. Gerçek `next dev`
   sunucusuna karşı login→PUT→GET→sayfa render tam döngüsü manuel doğrulandı.
   Lint/typecheck/build temiz. Must-Have tablosu madde 5 "Tamamlandı"
-  işaretlendi. **Henüz commit edilmedi, sıradaki adım commit+push.**
+  işaretlendi. Commit+push edildi (6381029).
+
+- **Kalıcı tercih güncellemesi (2026-06-10):** kullanıcı artık git için onay
+  istenmesine gerek olmadığını belirtti — bundan sonra her madde
+  tamamlandığında (test/lint/typecheck/build yeşil) otomatik commit+push
+  yapılıyor, ayrıca sorulmuyor (bkz. dosyanın başındaki "Kalıcı kullanıcı
+  tercihi" notu).
+
+- **Nice-to-Have: Klavye kısayolları tamamlandı (2026-06-10):** Yeni
+  `lib/shortcuts.ts` (`matchesHotkey` + `useHotkey`), `Ctrl/Cmd+K` komut
+  paleti (`CommandPalette.tsx`), `?` yardım penceresi
+  (`ShortcutsHelpModal.tsx`), `Ctrl/Cmd+S` kaydet + `Ctrl/Cmd+Enter` çalıştır
+  (reports/dashboards sayfalarındaki mevcut fonksiyonlara bağlandı, GitHub
+  tarzı "g sonra r" dizileri kasıtlı olarak eklenmedi). 6 yeni test — toplam
+  **294 test**. Lint/typecheck/build temiz. Commit+push edildi (sıradaki adım).

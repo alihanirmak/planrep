@@ -8,6 +8,7 @@ import { migrateDef } from "@/lib/report-types";
 import { getT, readLocaleClient } from "@/lib/i18n";
 import type { Member } from "@/lib/pivot";
 import { useVersionConflict } from "@/lib/hooks/useVersionConflict";
+import { useHotkey } from "@/lib/shortcuts";
 
 type Dim = { id: number; code: string; name: string; members: Member[] };
 type Model = { id: number; code: string; name: string; dims: Dim[] };
@@ -48,6 +49,8 @@ export default function DashboardsPage() {
     isMine,
     fetchLatest: fetchLatestDashboard,
   });
+
+  useHotkey({ key: "s", mod: true }, () => void save());
 
   const [showForm, setShowForm] = useState(false);
   const [source, setSource] = useState<"manual" | "report">("manual");

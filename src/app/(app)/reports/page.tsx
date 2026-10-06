@@ -26,6 +26,7 @@ import MemberPicker from "@/components/MemberPicker";
 import DrillModal from "@/components/DrillModal";
 import { getT, readLocaleClient } from "@/lib/i18n";
 import { useVersionConflict } from "@/lib/hooks/useVersionConflict";
+import { useHotkey } from "@/lib/shortcuts";
 
 type Dim = PivotDim & { id: number; slot: number };
 type Model = { id: number; code: string; name: string; dims: Dim[] };
@@ -239,6 +240,9 @@ export default function ReportsPage() {
     isMine,
     fetchLatest: fetchLatestReport,
   });
+
+  useHotkey({ key: "s", mod: true }, () => void save());
+  useHotkey({ key: "Enter", mod: true }, () => void run());
 
   const [modelId, setModelId] = useState<number | null>(null);
   const [rowsZone, setRowsZone] = useState<string[]>([]);
