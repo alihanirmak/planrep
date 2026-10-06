@@ -71,7 +71,7 @@
 
 > Sıralama: önce commit'e girmemiş/yarım kalan küçük teknik borçlar (1-3), sonra orijinal Sprint 2.3'ün kalan 3 maddesi orijinal sırasıyla (4-6).
 
-1. [ ] a11y iyileştirmelerini bitir ve commit'e al — `src/lib/a11y.ts` (`useEscapeKey`/`useFocusTrap`) ile `MemberPicker`/`DrillModal` entegrasyonu zaten yazılmış ama commit'e girmemiş (`git status`); kalan iş: drag-and-drop alanlarına (`reports/page.tsx`, `dashboards/page.tsx`) klavye eşdeğeri eklemek, sonra commit.
+1. [x] a11y iyileştirmelerini bitir ve commit'e al — `src/lib/a11y.ts` (`useEscapeKey`/`useFocusTrap`) ile `MemberPicker`/`DrillModal` entegrasyonu zaten yazılmış ama commit'e girmemiş (`git status`); kalan iş: drag-and-drop alanlarına (`reports/page.tsx`, `dashboards/page.tsx`) klavye eşdeğeri eklemek, sonra commit. — ✅ tamamlandı (2026-06-10, commit `820c007`): `reports/page.tsx`'teki boyut sıralama alanına (`DimChip`/`DropZone`) ok tuşlarıyla taşıma eklendi (↑/↓ bölge içi sıralama, ←/→ bölgeler arası taşıma, `role="button"`+`tabIndex`+`aria-label`); `dashboards/page.tsx`/`DashboardWidget.tsx`'teki widget sıralamasına ◀/▶ klavye-erişilebilir butonları eklendi. Lint/typecheck/test (112/112)/build temiz.
 2. [ ] Formül motoruna `SUMIF` ekle — `lib/formula.ts`'e `SUMIF(aralık;koşul)` fonksiyonu (Sprint 2.2'den kalan tek eksik parça).
 3. [ ] `/api/pivot`, `/api/query`'ye gerçek sayfalama ekle — şu an sert üst sınır (`400 result_too_large`) var ama page/pageSize tabanlı gerçek sayfalama yok (Sprint 1.2'den kalan).
 4. [ ] i18n'i tam kapsama al — export dosyaları (PPTX/Excel başlık/etiketler) ve tüm hata mesajları `getT()` üzerinden çözülecek şekilde güncellenmeli.
