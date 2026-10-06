@@ -1,0 +1,32 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: planrep:latest
+    ports:
+      - "3000:3000"
+    environment:
+      # Production icin ZORUNLU: en az 16 karakter, gizli ve kalici bir deger verin.
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET env degiskeni gerekli (en az 16 karakter)}
+      DATABASE_PATH: /app/data/planrep.db
+      # SAP/AXET entegrasyon binary'si container icinde yoksa AI sorgu uctan
+      # devre disi kalsin diye varsayilan olarak kapali; gerekirse 0 yapin.
+      AXET_DISABLE: ${AXET_DISABLE:-1}
+    volumes:
+      - planrep-data:/app/data
+    restart: unless-stopped
+
+  # Tek seferlik yedek almak icin: docker compose run --rm backup
+  backup:
+    image: planrep:latest
+    profiles: ["tools"]
+    environment:
+      DATABASE_PATH: /app/data/planrep.db
+      BACKUP_RETENTION: ${BACKUP_RETENTION:-14}
+    volumes:
+      - planrep-data:/app/data
+    entrypoint: ["node", "scripts/backup-db.js"]
+
+volumes:
+  planrep-data:

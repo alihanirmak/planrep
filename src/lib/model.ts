@@ -29,7 +29,48 @@ export function getModels(): ModelInfo[] {
   const models = sqlite
     .prepare("SELECT id, code, name, description FROM models ORDER BY id")
     .all() as Array<{ id: number; code: string; name: string; description: string | null }>;
-  return models.map((m) => ({ ...m, dims: getModelDims(m.id) }));
+  if (models.length === 0) return [];
+
+  const modelIds = models.map((m) => m.id);
+  const phModels = modelIds.map(() => "?").join(",");
+  const modelDimRows = sqlite
+    .prepare(
+      `SELECT md.model_id AS modelId, d.id, d.code, d.name, d.type, md.slot
+       FROM model_dimensions md JOIN dimensions d ON d.id = md.dimension_id
+       WHERE md.model_id IN (${phModels}) ORDER BY md.model_id, md.slot`
+    )
+    .all(...modelIds) as Array<Omit<DimInfo, "members"> & { modelId: number }>;
+
+  const dimIds = [...new Set(modelDimRows.map((r) => r.id))];
+  const membersByDim = fetchMembersByDimension(dimIds);
+
+  const dimsByModel = new Map<number, DimInfo[]>();
+  for (const { modelId, ...d } of modelDimRows) {
+    const arr = dimsByModel.get(modelId) ?? [];
+    arr.push({ ...d, members: membersByDim.get(d.id) ?? [] });
+    dimsByModel.set(modelId, arr);
+  }
+
+  return models.map((m) => ({ ...m, dims: dimsByModel.get(m.id) ?? [] }));
+}
+
+// Birden fazla boyutun uyelerini tek sorguda ceker (N+1'i onler).
+function fetchMembersByDimension(dimensionIds: number[]): Map<number, Member[]> {
+  const out = new Map<number, Member[]>();
+  if (dimensionIds.length === 0) return out;
+  const placeholders = dimensionIds.map(() => "?").join(",");
+  const members = sqlite
+    .prepare(
+      `SELECT id, dimension_id AS dimensionId, code, name, parent_id AS parentId, order_idx AS orderIdx
+       FROM dimension_members WHERE dimension_id IN (${placeholders}) ORDER BY order_idx, id`
+    )
+    .all(...dimensionIds) as Array<Member & { dimensionId: number }>;
+  for (const { dimensionId, ...m } of members) {
+    const arr = out.get(dimensionId) ?? [];
+    arr.push(m);
+    out.set(dimensionId, arr);
+  }
+  return out;
 }
 
 export function getModelDims(modelId: number): DimInfo[] {
@@ -40,11 +81,9 @@ export function getModelDims(modelId: number): DimInfo[] {
        WHERE md.model_id = ? ORDER BY md.slot`
     )
     .all(modelId) as Array<Omit<DimInfo, "members">>;
-  const memStmt = sqlite.prepare(
-    `SELECT id, code, name, parent_id AS parentId, order_idx AS orderIdx
-     FROM dimension_members WHERE dimension_id = ? ORDER BY order_idx, id`
-  );
-  return dims.map((d) => ({ ...d, members: memStmt.all(d.id) as Member[] }));
+  if (dims.length === 0) return [];
+  const membersByDim = fetchMembersByDimension(dims.map((d) => d.id));
+  return dims.map((d) => ({ ...d, members: membersByDim.get(d.id) ?? [] }));
 }
 
 // Secilen uye kodlari + tum alt uyelerinin kodlari

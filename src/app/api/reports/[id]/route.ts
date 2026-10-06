@@ -97,7 +97,11 @@ export async function DELETE(
   if (r.owner_id !== session.id) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
-  sqlite.prepare("DELETE FROM reports WHERE id = ?").run(id);
+  const tx = sqlite.transaction(() => {
+    sqlite.prepare("DELETE FROM comments WHERE entity_type = 'report' AND entity_id = ?").run(String(id));
+    sqlite.prepare("DELETE FROM reports WHERE id = ?").run(id);
+  });
+  tx();
   logAudit(session.id, "report.delete", "report", id, { name: r.name });
   return NextResponse.json({ ok: true });
 }

@@ -2,7 +2,7 @@
 
 // Kayitli bir raporu (pivot grid) salt-okunur olarak render eder.
 // Dashboard "Tam Rapor" widget'i ve gelecekte story sayfalari bunu kullanir.
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPivotEngine, type PivotDim, type PivotEngine, type PivotViewRow } from "@/lib/pivot";
 import { migrateDef, type ReportDefV2 } from "@/lib/report-types";
 import { compileFormula } from "@/lib/formula";
@@ -26,13 +26,15 @@ export default function ReportView({
   const [error, setError] = useState(false);
 
   const extraKey = JSON.stringify(extraFilters ?? {});
+  const aliveRef = useRef(true);
 
-  useEffect(() => {
-    let alive = true;
-    setError(false);
-    setEngine(null);
-    (async () => {
-      try {
+  const load = useCallback(() => {
+    Promise.resolve()
+      .then(() => {
+        setError(false);
+        setEngine(null);
+      })
+      .then(async () => {
         const rRes = await fetch(`/api/reports/${reportId}`);
         if (!rRes.ok) throw new Error();
         const report = await rRes.json();
@@ -54,20 +56,25 @@ export default function ReportView({
         const rowDims = d.rows.map((c) => model.dims.find((x) => x.code === c)!);
         const colDims = d.cols.map((c) => model.dims.find((x) => x.code === c)!);
         const eng = createPivotEngine(rowDims, colDims, tuples);
-        if (!alive) return;
+        if (!aliveRef.current) return;
         setDef(d);
         setDims({ rows: rowDims, cols: colDims });
         setEngine(eng);
         setExpanded(eng.defaultExpanded());
         setSort(d.options.sort);
-      } catch {
-        if (alive) setError(true);
-      }
-    })();
-    return () => {
-      alive = false;
-    };
+      })
+      .catch(() => {
+        if (aliveRef.current) setError(true);
+      });
   }, [reportId, extraKey]);
+
+  useEffect(() => {
+    aliveRef.current = true;
+    load();
+    return () => {
+      aliveRef.current = false;
+    };
+  }, [load]);
 
   const view = useMemo(
     () =>

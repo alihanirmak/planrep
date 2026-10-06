@@ -45,3 +45,4 @@ next-env.d.ts
 /data/*.db-shm
 /data/*.db-wal
 /data/*.db-journal
+/data/backups/

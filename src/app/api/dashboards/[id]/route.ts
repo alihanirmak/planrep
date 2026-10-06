@@ -94,7 +94,11 @@ export async function DELETE(
   if (r.owner_id !== session.id) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
-  sqlite.prepare("DELETE FROM dashboards WHERE id = ?").run(id);
+  const tx = sqlite.transaction(() => {
+    sqlite.prepare("DELETE FROM comments WHERE entity_type = 'dashboard' AND entity_id = ?").run(String(id));
+    sqlite.prepare("DELETE FROM dashboards WHERE id = ?").run(id);
+  });
+  tx();
   logAudit(session.id, "dashboard.delete", "dashboard", id, { name: r.name });
   return NextResponse.json({ ok: true });
 }

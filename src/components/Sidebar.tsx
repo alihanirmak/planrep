@@ -18,6 +18,10 @@ const NAV: Array<{ href: string; key: TKey; icon: string; adminOnly?: boolean }>
   { href: "/admin/audit", key: "nav.audit", icon: "📜", adminOnly: true },
 ];
 
+function setLocaleCookie(next: Locale) {
+  document.cookie = `${LOCALE_COOKIE}=${next}; path=/; max-age=31536000`;
+}
+
 export default function Sidebar({
   user,
   locale,
@@ -30,7 +34,7 @@ export default function Sidebar({
   const t = getT(locale);
 
   function switchLocale(next: Locale) {
-    document.cookie = `${LOCALE_COOKIE}=${next}; path=/; max-age=31536000`;
+    setLocaleCookie(next);
     router.refresh();
   }
 

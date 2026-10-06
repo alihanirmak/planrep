@@ -60,10 +60,19 @@ export async function DELETE(
   if (!model) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
   const tx = sqlite.transaction(() => {
+    const reportIds = sqlite
+      .prepare("SELECT id FROM reports WHERE model_id = ?")
+      .all(id) as Array<{ id: number }>;
+    for (const r of reportIds) {
+      sqlite
+        .prepare("DELETE FROM comments WHERE entity_type = 'report' AND entity_id = ?")
+        .run(String(r.id));
+    }
     sqlite.prepare("DELETE FROM facts WHERE model_id = ?").run(id);
     sqlite.prepare("DELETE FROM model_dimensions WHERE model_id = ?").run(id);
     sqlite.prepare("DELETE FROM reports WHERE model_id = ?").run(id);
     sqlite.prepare("DELETE FROM uploads WHERE model_id = ?").run(id);
+    sqlite.prepare("UPDATE dimensions SET owner_model_id = NULL WHERE owner_model_id = ?").run(id);
     sqlite.prepare("DELETE FROM models WHERE id = ?").run(id);
   });
   tx();

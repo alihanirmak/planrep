@@ -15,16 +15,44 @@ export async function GET() {
        ORDER BY d.id`
     )
     .all() as Array<{ id: number }>;
-  const memStmt = sqlite.prepare(
-    `SELECT id, code, name, parent_id AS parentId, order_idx AS orderIdx
-     FROM dimension_members WHERE dimension_id = ? ORDER BY order_idx, id`
-  );
-  const usedStmt = sqlite.prepare(
-    `SELECT m.id, m.name FROM model_dimensions md JOIN models m ON m.id = md.model_id
-     WHERE md.dimension_id = ? ORDER BY m.id`
-  );
+  if (dims.length === 0) return NextResponse.json([]);
+
+  const dimIds = dims.map((d) => d.id);
+  const phDims = dimIds.map(() => "?").join(",");
+
+  const allMembers = sqlite
+    .prepare(
+      `SELECT dimension_id AS dimensionId, id, code, name, parent_id AS parentId, order_idx AS orderIdx
+       FROM dimension_members WHERE dimension_id IN (${phDims}) ORDER BY dimension_id, order_idx, id`
+    )
+    .all(...dimIds) as Array<{ dimensionId: number } & Record<string, unknown>>;
+  const membersByDim = new Map<number, unknown[]>();
+  for (const { dimensionId, ...m } of allMembers) {
+    const arr = membersByDim.get(dimensionId) ?? [];
+    arr.push(m);
+    membersByDim.set(dimensionId, arr);
+  }
+
+  const allUsed = sqlite
+    .prepare(
+      `SELECT md.dimension_id AS dimensionId, m.id, m.name
+       FROM model_dimensions md JOIN models m ON m.id = md.model_id
+       WHERE md.dimension_id IN (${phDims}) ORDER BY md.dimension_id, m.id`
+    )
+    .all(...dimIds) as Array<{ dimensionId: number; id: number; name: string }>;
+  const usedByDim = new Map<number, Array<{ id: number; name: string }>>();
+  for (const u of allUsed) {
+    const arr = usedByDim.get(u.dimensionId) ?? [];
+    arr.push({ id: u.id, name: u.name });
+    usedByDim.set(u.dimensionId, arr);
+  }
+
   return NextResponse.json(
-    dims.map((d) => ({ ...d, members: memStmt.all(d.id), usedIn: usedStmt.all(d.id) }))
+    dims.map((d) => ({
+      ...d,
+      members: membersByDim.get(d.id) ?? [],
+      usedIn: usedByDim.get(d.id) ?? [],
+    }))
   );
 }
 

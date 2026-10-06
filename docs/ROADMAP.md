@@ -1,7 +1,7 @@
 # PlanRep — Geliştirme Yol Haritası & Takip Listesi
 
 > **Nasıl kullanılır:** Bu dosya yaşayan bir takip listesidir. Bir madde üzerinde çalışmaya başlarken `[ ]` → işe başlandığında yorum/PR linki ekleyin, tamamlandığında `[x]` yapın. Detaylı mimari gerekçeler için `ARCHITECTURE_AUDIT.md`'ye bakın.
-> **Son güncelleme:** 2026-05-10
+> **Son güncelleme:** 2026-06-10 — Sprint 1.1 tamamlandı (lint borcu, cascade cleanup, IN(...) chunking, N+1 optimizasyonu, Docker, DB yedekleme scripti). Faz 1/2/3 sprintlere bölündü (her sprint 2-8 hafta arası, Faz'ın toplam süresine göre); büyük maddeler artık daha küçük, takip edilebilir parçalar halinde.
 
 ---
 
@@ -18,48 +18,70 @@
 - [x] Basit rate limiting middleware (login, AI query, export uçları için token-bucket/IP bazlı)
 - [x] `api/users/[id]/route.ts` — "son admin" kontrolünü transaction içine al (TOCTOU fix)
 
-## Faz 1 — Kısa Vade (≈1 ay)
+## Faz 1 — Kısa Vade (≈1 ay, 2 sprint × 2 hafta)
+
+### Sprint 1.1 (hafta 1-2) — hızlı kazanımlar & altyapı temizliği
+
+- [x] React Compiler lint borcu temizliği (`eslint-plugin-react-hooks` v7: set-state-in-effect, static-components, immutability) — `admin/users/page.tsx`, `reports/page.tsx`, `DashboardWidget.tsx`, `ReportView.tsx`, `Sidebar.tsx`
+- [x] Model/rapor/dashboard silme işlemlerine cascade cleanup ekle (comments, dimension `owner_model_id` reset)
+- [x] SQL `IN (...)` listelerini chunk'lama (999 parametre limiti için)
+- [x] `getModelDims`/`/api/dimensions`/`/api/models` N+1 sorgu paternlerini optimize et (JOIN ile tekilleştir)
+- [x] Dockerfile + docker-compose.yml oluştur
+- [x] Temel DB yedekleme scripti (SQLite dosya snapshot + rotasyon)
+
+### Sprint 1.2 (hafta 3-4) — veri katmanı & test altyapısı
 
 - [ ] Veritabanı geçiş değerlendirmesi: PostgreSQL'e geçiş planı (Drizzle ORM soyutlaması zaten mevcut) veya better-sqlite3 için async wrapper/connection pool
 - [ ] `upsertFacts` (`lib/facts-write.ts`) satır-satır işlemi toplu (bulk) upsert'e çevir
 - [ ] `/api/pivot`, `/api/query` endpoint'lerine satır/sütun üst sınırı + sayfalama ekle
-- [ ] Model/rapor/dashboard silme işlemlerine cascade cleanup ekle (comments, dimension `owner_model_id` reset)
 - [ ] Test altyapısı kurulumu (Vitest/Jest) ve kritik modüller için birim testleri:
   - [ ] `lib/formula.ts`
   - [ ] `lib/pivot.ts`
   - [ ] `lib/access.ts`
   - [ ] `lib/facts-write.ts`
   - [ ] `lib/query.ts`
-- [ ] Dockerfile + docker-compose.yml oluştur
-- [ ] Temel DB yedekleme scripti (SQLite dosya snapshot + rotasyon)
-- [ ] SQL `IN (...)` listelerini chunk'lama (999 parametre limiti için)
-- [ ] `getModelDims`/`/api/dimensions`/`/api/models` N+1 sorgu paternlerini optimize et (JOIN ile tekilleştir)
-- [ ] React Compiler lint borcu temizliği (`eslint-plugin-react-hooks` v7: set-state-in-effect, static-components, immutability) — `admin/users/page.tsx`, `reports/page.tsx`, `DashboardWidget.tsx`, `ReportView.tsx`, `Sidebar.tsx`
 
-## Faz 2 — Orta Vade (2-3 ay)
+## Faz 2 — Orta Vade (2-3 ay, 3 sprint × ~3 hafta)
+
+### Sprint 2.1 — Workflow & senaryo yönetimi
 
 - [ ] Workflow/onay akışı (submit → review → approve → lock) veri modeli + UI
 - [ ] Senaryo/versiyon karşılaştırma ekranı (VERSION dimension üzerine kopyalama/compare UI)
+
+### Sprint 2.2 — Audit, formül motoru & iş kuralları
+
 - [ ] Cell-level audit trail görünümü + rollback (undo) mekanizması
 - [ ] Formül motoruna gelişmiş fonksiyonlar: `IF`, `SUMIF`, zaman-serisi ofseti (`[ACCOUNT].PY`, `MOVAVG`)
 - [ ] İş kuralı (business rule) motoru — örn. "Bütçe negatif olamaz" tipi validasyonlar
+
+### Sprint 2.3 — Entegrasyon, erişilebilirlik & bildirimler
+
 - [ ] Connector plugin mimarisi (DB'de connector config, dinamik kayıt — statik dizi yerine)
 - [ ] Erişilebilirlik (a11y) iyileştirmeleri: ARIA attribute'ları, modal focus-trap/ESC, klavye navigasyonu (`MemberPicker`, `DrillModal`, drag-and-drop alanları)
 - [ ] i18n'i tam kapsama al (export dosyaları — PPTX/Excel başlık/etiketler, tüm hata mesajları)
 - [ ] Bildirim sistemi (yorum/mention, onay bekleyen görev — en azından in-app, sonra e-posta)
 - [ ] Zamanlanmış veri yenileme (cron/webhook ile SAP OData senkronizasyonu)
 
-## Faz 3 — Uzun Vade (3-6 ay)
+## Faz 3 — Uzun Vade (3-6 ay, 3 sprint × ~6-8 hafta)
+
+### Sprint 3.1 — Çoklu-tenant & kimlik
 
 - [ ] Çoklu-tenant / organizasyon desteği
 - [ ] SSO entegrasyonu (SAML/OAuth2/Okta/Azure AD)
+- [ ] 2FA desteği
+
+### Sprint 3.2 — Gerçek zamanlı & performans
+
 - [ ] Gerçek zamanlı collaboration (WebSocket, eşzamanlı düzenleme kilidi/optimistic concurrency)
+- [ ] Sunucu taraflı caching (Redis) katmanı
+- [ ] Büyük pivot tabloları için sanal kaydırma (virtualized grid — `PivotGrid.tsx`)
+
+### Sprint 3.3 — AI, mobil & dış entegrasyon
+
 - [ ] Anomali tespiti / AI destekli öngörü (forecast) modülü
 - [ ] Mobil/responsive dashboard, PWA desteği
 - [ ] Harici BI araçlarına veri köprüsü (REST/OData export API — Power BI/Tableau bağlantısı)
-- [ ] 2FA desteği
-- [ ] Büyük pivot tabloları için sanal kaydırma (virtualized grid — `PivotGrid.tsx`)
-- [ ] Sunucu taraflı caching (Redis) katmanı
+
 
 ---
 

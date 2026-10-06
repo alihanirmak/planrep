@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { sqlite } from "@/lib/db";
-import { getModelDims, withDescendants } from "@/lib/model";
-import { allowedSets, restrictCodes } from "@/lib/access";
+import { getModelDims } from "@/lib/model";
+import { allowedSets } from "@/lib/access";
+import { buildFactWhereVariants, sumGroupedRows } from "@/lib/fact-filters";
 
 const bodySchema = z.object({
   modelId: z.number().int(),
@@ -34,20 +35,8 @@ export async function POST(req: Request) {
   }
 
   const access = allowedSets(session.id, dims);
-  const where: string[] = ["model_id = ?"];
-  const params: unknown[] = [modelId];
-  for (const d of dims) {
-    const requested =
-      filters[d.code] && filters[d.code].length > 0
-        ? withDescendants(d.members, filters[d.code])
-        : undefined;
-    const codes = restrictCodes(requested, access.get(d.code));
-    if (codes) {
-      if (codes.length === 0) return NextResponse.json({ tuples: [] });
-      where.push(`d${d.slot} IN (${codes.map(() => "?").join(",")})`);
-      params.push(...codes);
-    }
-  }
+  const { variants, empty } = buildFactWhereVariants(modelId, dims, filters, access);
+  if (empty) return NextResponse.json({ tuples: [] });
 
   const rowSel = rowD.map((d, i) => `d${d!.slot} AS r${i}`).join(", ");
   const colSel = colD.map((d, i) => `d${d!.slot} AS c${i}`).join(", ");
@@ -55,9 +44,17 @@ export async function POST(req: Request) {
     ...rowD.map((d) => `d${d!.slot}`),
     ...colD.map((d) => `d${d!.slot}`),
   ].join(", ");
-  const sql = `SELECT ${rowSel}, ${colSel}, SUM(value) AS v
-               FROM facts WHERE ${where.join(" AND ")} GROUP BY ${groupBy}`;
-  const raw = sqlite.prepare(sql).all(...params) as Array<Record<string, unknown>>;
+  const partials = variants.map(
+    (v) =>
+      sqlite
+        .prepare(
+          `SELECT ${rowSel}, ${colSel}, SUM(value) AS v
+           FROM facts WHERE ${v.sql} GROUP BY ${groupBy}`
+        )
+        .all(...v.params) as Array<Record<string, unknown>>
+  );
+  const keyFields = [...rowD.map((_, i) => `r${i}`), ...colD.map((_, i) => `c${i}`)];
+  const raw = sumGroupedRows(partials, keyFields);
 
   const tuples = raw.map((row) => ({
     r: rows.map((_, i) => String(row[`r${i}`])),

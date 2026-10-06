@@ -37,11 +37,13 @@ export default function UsersPage() {
   const [accessMap, setAccessMap] = useState<Record<number, string[]>>({});
   const [accessMsg, setAccessMsg] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    const res = await fetch("/api/users");
-    if (res.ok) setRows(await res.json());
-    setLoading(false);
+  const load = useCallback(() => {
+    fetch("/api/users")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data) setRows(data);
+        setLoading(false);
+      });
   }, []);
 
   useEffect(() => {

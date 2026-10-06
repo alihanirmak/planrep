@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   BarChart,
   Bar,
@@ -100,23 +100,34 @@ export default function DashboardWidget({
   const mergedFilters = JSON.stringify({ ...widget.query.filters, ...(extraFilters ?? {}) });
 
   const isReport = widget.type === "report";
+  const aliveRef = useRef(true);
+
+  const load = useCallback(() => {
+    Promise.resolve()
+      .then(() => {
+        setData(null);
+        setError(false);
+      })
+      .then(() =>
+        fetch("/api/query", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...widget.query, filters: JSON.parse(mergedFilters) }),
+        })
+      )
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d) => aliveRef.current && setData(d))
+      .catch(() => aliveRef.current && setError(true));
+  }, [widget, mergedFilters]);
+
   useEffect(() => {
     if (isReport) return; // tam rapor widget'i ReportView kendi verisini ceker
-    let alive = true;
-    setData(null);
-    setError(false);
-    fetch("/api/query", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...widget.query, filters: JSON.parse(mergedFilters) }),
-    })
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((d) => alive && setData(d))
-      .catch(() => alive && setError(true));
+    aliveRef.current = true;
+    load();
     return () => {
-      alive = false;
+      aliveRef.current = false;
     };
-  }, [widget, mergedFilters, isReport]);
+  }, [isReport, load]);
 
   return (
     <div className="flex min-h-64 flex-col rounded-xl bg-white p-4 shadow-sm">

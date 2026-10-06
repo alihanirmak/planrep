@@ -76,6 +76,74 @@ function Section({
   );
 }
 
+function DimChip({
+  code,
+  zone,
+  dims,
+  onMove,
+}: {
+  code: string;
+  zone: Zone;
+  dims: Dim[];
+  onMove: (code: string, to: Zone, beforeCode?: string) => void;
+}) {
+  const dim = dims.find((d) => d.code === code);
+  if (!dim) return null;
+  return (
+    <span
+      draggable
+      onDragStart={(e) => e.dataTransfer.setData("text/plain", code)}
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const dragged = e.dataTransfer.getData("text/plain");
+        if (dragged && dragged !== code) onMove(dragged, zone, code);
+      }}
+      className="flex cursor-grab select-none items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-700 shadow-sm hover:border-blue-400 active:cursor-grabbing"
+      title="Sürükleyerek taşı"
+    >
+      <span className="text-slate-300">⠿</span> {dim.name}
+    </span>
+  );
+}
+
+function DropZone({
+  zone,
+  label,
+  items,
+  hint,
+  dims,
+  onMove,
+}: {
+  zone: Zone;
+  label: string;
+  items: string[];
+  hint: string;
+  dims: Dim[];
+  onMove: (code: string, to: Zone, beforeCode?: string) => void;
+}) {
+  return (
+    <div
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={(e) => {
+        e.preventDefault();
+        const dragged = e.dataTransfer.getData("text/plain");
+        if (dragged) onMove(dragged, zone);
+      }}
+      className="rounded-lg border border-dashed border-slate-200 bg-slate-50/60 p-2"
+    >
+      <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label}</div>
+      <div className="flex flex-col gap-1.5">
+        {items.map((c) => (
+          <DimChip key={c} code={c} zone={zone} dims={dims} onMove={onMove} />
+        ))}
+        {items.length === 0 && <span className="py-1 text-center text-xs text-slate-300">{hint}</span>}
+      </div>
+    </div>
+  );
+}
+
 function IconBtn({
   icon,
   title,
@@ -237,50 +305,6 @@ export default function ReportsPage() {
     setRowsZone(rows);
     setColsZone(cols);
     setMsg(null);
-  }
-
-  function DimChip({ code, zone }: { code: string; zone: Zone }) {
-    const dim = model?.dims.find((d) => d.code === code);
-    if (!dim) return null;
-    return (
-      <span
-        draggable
-        onDragStart={(e) => e.dataTransfer.setData("text/plain", code)}
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          const dragged = e.dataTransfer.getData("text/plain");
-          if (dragged && dragged !== code) moveDim(dragged, zone, code);
-        }}
-        className="flex cursor-grab select-none items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-700 shadow-sm hover:border-blue-400 active:cursor-grabbing"
-        title="Sürükleyerek taşı"
-      >
-        <span className="text-slate-300">⠿</span> {dim.name}
-      </span>
-    );
-  }
-
-  function DropZone({ zone, label, items, hint }: { zone: Zone; label: string; items: string[]; hint: string }) {
-    return (
-      <div
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={(e) => {
-          e.preventDefault();
-          const dragged = e.dataTransfer.getData("text/plain");
-          if (dragged) moveDim(dragged, zone);
-        }}
-        className="rounded-lg border border-dashed border-slate-200 bg-slate-50/60 p-2"
-      >
-        <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label}</div>
-        <div className="flex flex-col gap-1.5">
-          {items.map((c) => (
-            <DimChip key={c} code={c} zone={zone} />
-          ))}
-          {items.length === 0 && <span className="py-1 text-center text-xs text-slate-300">{hint}</span>}
-        </div>
-      </div>
-    );
   }
 
   // --- Calistir ---
@@ -854,9 +878,9 @@ export default function ReportsPage() {
                 ))}
               </select>
               <div className="space-y-2">
-                <DropZone zone="rows" label="Satırlar (iç içe)" items={rowsZone} hint="buraya sürükle" />
-                <DropZone zone="cols" label="Sütunlar" items={colsZone} hint="buraya sürükle" />
-                <DropZone zone="unused" label="Kullanılmayan" items={unusedZone} hint="—" />
+                <DropZone zone="rows" label="Satırlar (iç içe)" items={rowsZone} hint="buraya sürükle" dims={model?.dims ?? []} onMove={moveDim} />
+                <DropZone zone="cols" label="Sütunlar" items={colsZone} hint="buraya sürükle" dims={model?.dims ?? []} onMove={moveDim} />
+                <DropZone zone="unused" label="Kullanılmayan" items={unusedZone} hint="—" dims={model?.dims ?? []} onMove={moveDim} />
               </div>
             </Section>
 

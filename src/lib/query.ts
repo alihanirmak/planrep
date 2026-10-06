@@ -1,6 +1,7 @@
 import { sqlite } from "./db";
-import { getModelDims, withDescendants, type Member } from "./model";
-import { allowedSets, restrictCodes } from "./access";
+import { getModelDims, type Member } from "./model";
+import { allowedSets } from "./access";
+import { buildFactWhereVariants, sumGroupedRows } from "./fact-filters";
 import type { QueryResult, QueryRow } from "./report-types";
 
 export function runQuery(
@@ -16,25 +17,21 @@ export function runQuery(
   if (!rowD || !colD || rowDim === colDim) return { error: "invalid_dims" };
 
   const access = userId != null ? allowedSets(userId, dims) : new Map<string, Set<string>>();
-  const where: string[] = ["model_id = ?"];
-  const params: unknown[] = [modelId];
-  for (const d of dims) {
-    const sel = filters[d.code];
-    const requested =
-      sel && sel.length > 0 ? withDescendants(d.members, sel) : undefined;
-    const codes = restrictCodes(requested, access.get(d.code));
-    if (codes) {
-      if (codes.length === 0) {
-        return { rows: [], cols: [], colTotals: {}, grandTotal: 0 };
-      }
-      where.push(`d${d.slot} IN (${codes.map(() => "?").join(",")})`);
-      params.push(...codes);
-    }
+  const { variants, empty } = buildFactWhereVariants(modelId, dims, filters, access);
+  if (empty) {
+    return { rows: [], cols: [], colTotals: {}, grandTotal: 0 };
   }
 
-  const sql = `SELECT d${rowD.slot} AS r, d${colD.slot} AS c, SUM(value) AS v
-               FROM facts WHERE ${where.join(" AND ")} GROUP BY r, c`;
-  const raw = sqlite.prepare(sql).all(...params) as Array<{
+  const partials = variants.map(
+    (v) =>
+      sqlite
+        .prepare(
+          `SELECT d${rowD.slot} AS r, d${colD.slot} AS c, SUM(value) AS v
+           FROM facts WHERE ${v.sql} GROUP BY r, c`
+        )
+        .all(...v.params) as Array<Record<string, unknown>>
+  );
+  const raw = sumGroupedRows(partials, ["r", "c"]) as Array<{
     r: string;
     c: string;
     v: number;
