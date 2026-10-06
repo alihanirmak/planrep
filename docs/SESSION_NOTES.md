@@ -27,6 +27,26 @@
     workflow, senaryolar, AI sorgu, entegrasyonlar, bildirimler, hesap
     güvenliği, admin ekranları, klavye kısayolları, PWA, SSS).
 
+## Karmaşık hesaplama dili tartışması → backlog (2026-06-10)
+
+- Kullanıcı sordu: bütçe planlamadaki karmaşık hesaplamalar (bordro, maliyet
+  dağıtımı) için hangi dil konulmalı? İlk cevap ("mevcut DSL'i genişlet,
+  genel-amaçlı dil gömme") eksik bulundu — kullanıcı BPC Script Logic/SAC
+  Advanced Formula/ABAP exit örnekleriyle itiraz etti.
+- Düzeltilmiş analiz: BPC/SAC'ta güç = (a) **sınırlı-kapsamlı** prosedürel
+  DSL (döngü var ama boyut üyeleriyle sınırlı, Turing-complete değil) +
+  (b) gerçek kod ama IT tarafından **deploy edilmiş**, kullanıcının canlı
+  yazdığı değil. Bu ayrım PlanRep'e şöyle taşınabilir:
+  1. Sınırlı-kapsamlı script motoru (FOR EACH MEMBER OF, ALLOCATE, iteratif
+     yakınsama) — admin tanımlar, açık "Hesapla" eylemiyle tetiklenir.
+  2. Eklenti mimarisi (`lib/connectors/`teki `ConnectorTypeDef` ile BİREBİR
+     AYNI desen) — geliştirici TS fonksiyonu yazıp deploy eder, admin
+     modele bağlar; kullanıcı asla canlı kod çalıştırmaz (sandbox VM
+     güvenlik riski kasıtlı olarak reddedildi).
+- Kullanıcı "sonra karar vereceğiz, backlog'a ekle" dedi → `ROADMAP.md`
+  "Gelecek Yol Haritası" bölümüne detaylı madde olarak eklendi, henüz
+  hiçbir sprint'e bağlanmadı.
+
 ## 2026-06-10 — Faz 3 / Sprint 3.1 madde 1 (2FA/TOTP) DOĞRULANDI
 
 - Önceki oturumda (bu oturumun başlangıcında geçmişi görünmüyordu — proje git
