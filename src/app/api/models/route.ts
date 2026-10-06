@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth";
 import { getModels } from "@/lib/model";
 import { sqlite } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
+import { getServerT } from "@/lib/i18n-server";
 
 export async function GET() {
   const session = await getSession();
@@ -41,8 +42,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "dimension_not_found" }, { status: 400 });
     }
     if (dim.visibility === "private" && dim.ownerModelId != null) {
+      const { t } = await getServerT();
       return NextResponse.json(
-        { error: "private_dim_taken", message: "Private boyut başka bir modele ait" },
+        { error: "private_dim_taken", message: t("err.privateDimTaken") },
         { status: 400 }
       );
     }

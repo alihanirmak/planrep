@@ -3,6 +3,7 @@ import ExcelJS from "exceljs";
 import { getSession } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
 import { exportPayloadSchema } from "@/lib/export-schema";
+import { getServerT } from "@/lib/i18n-server";
 import type { ExportCell } from "@/lib/report-types";
 
 const STYLE_MAP: Record<string, { font?: Partial<ExcelJS.Font>; fill?: string }> = {
@@ -42,8 +43,9 @@ export async function POST(req: Request) {
       );
     }
     const body = parsed.data;
+    const { t } = await getServerT();
 
-    const name = body.name?.trim() || "Rapor";
+    const name = body.name?.trim() || t("export.defaultName");
     const fmt = numFmt(body.decimals ?? 0);
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet(name.slice(0, 31).replace(/[\\/*?:[\]]/g, "-"));
@@ -69,7 +71,7 @@ export async function POST(req: Request) {
     }
 
     const totalRow = ws.addRow([]);
-    totalRow.getCell(1).value = "Genel Toplam";
+    totalRow.getCell(1).value = t("export.grandTotal");
     body.totals.forEach((sc, i) => applyCell(totalRow.getCell(i + 2), sc, fmt));
     totalRow.font = { bold: true };
     totalRow.eachCell((c) => {

@@ -8,6 +8,7 @@ import {
   deleteWorkflowItem,
 } from "@/lib/workflow";
 import { logAudit } from "@/lib/audit";
+import { getServerT } from "@/lib/i18n-server";
 
 export async function GET(
   _req: Request,
@@ -38,8 +39,9 @@ export async function PATCH(
   const item = getWorkflowItem(id);
   if (!item) return NextResponse.json({ error: "not_found" }, { status: 404 });
   if (item.status !== "draft") {
+    const { t } = await getServerT();
     return NextResponse.json(
-      { error: "not_editable", message: "Sadece 'draft' durumundaki iş akışları düzenlenebilir" },
+      { error: "not_editable", message: t("err.workflowOnlyDraftEditable") },
       { status: 400 }
     );
   }

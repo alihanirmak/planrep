@@ -7,6 +7,7 @@ import { allowedSets } from "@/lib/access";
 import { buildFactWhereVariants, type WhereVariant } from "@/lib/fact-filters";
 import { findBlockingLockForFilters } from "@/lib/workflow";
 import { logAudit } from "@/lib/audit";
+import { getServerT } from "@/lib/i18n-server";
 
 const bodySchema = z.object({
   modelId: z.number().int(),
@@ -101,8 +102,9 @@ export async function DELETE(req: Request) {
   const { modelId, filters } = parsed.data;
   const hasFilter = Object.values(filters).some((v) => v.length > 0);
   if (!hasFilter) {
+    const { t } = await getServerT();
     return NextResponse.json(
-      { error: "filter_required", message: "Tüm modeli silmek için en az bir filtre seçilmeli" },
+      { error: "filter_required", message: t("err.filterRequiredForFullDelete") },
       { status: 400 }
     );
   }

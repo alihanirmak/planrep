@@ -5,6 +5,8 @@ import { sqlite } from "@/lib/db";
 import { getModelDims, rootMembers } from "@/lib/model";
 import { allowedSets } from "@/lib/access";
 import { buildFactWhereVariants, sumGroupedRows, MAX_AGGREGATE_RESULT_ROWS } from "@/lib/fact-filters";
+import { formatT } from "@/lib/i18n";
+import { getServerT } from "@/lib/i18n-server";
 
 const bodySchema = z.object({
   modelId: z.number().int(),
@@ -82,10 +84,11 @@ export async function POST(req: Request) {
   const keyFields = [...rowD.map((_, i) => `r${i}`), ...colD.map((_, i) => `c${i}`)];
   const raw = sumGroupedRows(partials, keyFields);
   if (raw.length > MAX_AGGREGATE_RESULT_ROWS) {
+    const { t } = await getServerT();
     return NextResponse.json(
       {
         error: "result_too_large",
-        message: `Sonuç seti çok büyük (${raw.length} hücre, üst sınır: ${MAX_AGGREGATE_RESULT_ROWS}). Lütfen filtre ekleyin veya sayfalama kullanın.`,
+        message: formatT(t("err.resultTooLargeCount"), { count: raw.length, max: MAX_AGGREGATE_RESULT_ROWS }),
       },
       { status: 400 }
     );

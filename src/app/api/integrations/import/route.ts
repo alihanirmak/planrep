@@ -10,6 +10,7 @@ import { WorkflowLockError } from "@/lib/workflow";
 import { BusinessRuleError } from "@/lib/business-rules";
 import { logAudit } from "@/lib/audit";
 import { parseLocaleNumber } from "@/lib/number";
+import { getServerT } from "@/lib/i18n-server";
 
 const MAX_ERRORS = 50;
 
@@ -62,8 +63,9 @@ export async function POST(req: Request) {
   try {
     data = await connector.fetchRows(source);
   } catch (e) {
+    const { t } = await getServerT();
     return NextResponse.json(
-      { error: "fetch_failed", message: e instanceof Error ? e.message : "hata" },
+      { error: "fetch_failed", message: e instanceof Error ? e.message : t("err.generic") },
       { status: 502 }
     );
   }

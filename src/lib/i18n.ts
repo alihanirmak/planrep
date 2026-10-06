@@ -101,6 +101,24 @@ const tr = {
   "pg.scenarios.to": "Hedef",
   "pg.scenarios.variance": "Fark",
   "pg.scenarios.variancePct": "Fark %",
+  "export.defaultName": "Rapor",
+  "export.grandTotal": "Genel Toplam",
+  "export.exportFailed": "Export başarısız",
+  "err.resultTooLarge": "Sonuç seti çok büyük (üst sınır: {max} hücre). Lütfen filtre ekleyin veya sayfalama kullanın.",
+  "err.resultTooLargeCount": "Sonuç seti çok büyük ({count} hücre, üst sınır: {max}). Lütfen filtre ekleyin veya sayfalama kullanın.",
+  "err.workflowOnlyDraftEditable": "Sadece 'draft' durumundaki iş akışları düzenlenebilir",
+  "err.filterRequiredForFullDelete": "Tüm modeli silmek için en az bir filtre seçilmeli",
+  "err.memberHasChildren": "Önce alt üyeleri silinmeli",
+  "err.privateDimTaken": "Private boyut başka bir modele ait",
+  "err.dimensionInUse": "Bu boyut bir model tarafından kullanılıyor",
+  "err.generic": "hata",
+  "err.axetFailed": "axet çalıştırılamadı: {detail}",
+  "err.axetTimeout": "axet zaman aşımı (90sn)",
+  "err.axetExitCode": "axet çıkış kodu {code}",
+  "err.axetResponseUnparseable": "axet yanıtı çözümlenemedi ({detail})",
+  "err.axetNoJson": "axet yanıtında JSON bulunamadı",
+  "err.axetNotFound": "axet-code bulunamadı",
+  "err.aiUnresolved": "Soru çözümlenemedi — daha açık ifade etmeyi dene",
 } as const;
 
 const en: Record<keyof typeof tr, string> = {
@@ -202,6 +220,24 @@ const en: Record<keyof typeof tr, string> = {
   "pg.scenarios.to": "Target",
   "pg.scenarios.variance": "Variance",
   "pg.scenarios.variancePct": "Variance %",
+  "export.defaultName": "Report",
+  "export.grandTotal": "Grand Total",
+  "export.exportFailed": "Export failed",
+  "err.resultTooLarge": "Result set is too large (limit: {max} cells). Please add a filter or use pagination.",
+  "err.resultTooLargeCount": "Result set is too large ({count} cells, limit: {max}). Please add a filter or use pagination.",
+  "err.workflowOnlyDraftEditable": "Only workflows in 'draft' status can be edited",
+  "err.filterRequiredForFullDelete": "At least one filter must be selected to delete the entire model",
+  "err.memberHasChildren": "Child members must be deleted first",
+  "err.privateDimTaken": "This private dimension already belongs to another model",
+  "err.dimensionInUse": "This dimension is used by a model",
+  "err.generic": "error",
+  "err.axetFailed": "axet failed to run: {detail}",
+  "err.axetTimeout": "axet timed out (90s)",
+  "err.axetExitCode": "axet exit code {code}",
+  "err.axetResponseUnparseable": "axet response could not be parsed ({detail})",
+  "err.axetNoJson": "No JSON found in axet response",
+  "err.axetNotFound": "axet-code not found",
+  "err.aiUnresolved": "Could not resolve the question — try rephrasing it more explicitly",
 };
 
 export type TKey = keyof typeof tr;
@@ -211,6 +247,17 @@ const dicts: Record<Locale, Record<TKey, string>> = { tr, en };
 export function getT(locale: string) {
   const d = dicts[(locale === "en" ? "en" : "tr") as Locale];
   return (key: TKey): string => d[key] ?? key;
+}
+
+// {placeholder} degiskenlerini degerlerle degistirir — err.* gibi parametreli
+// mesajlar icin (orn. "{max} hücre" -> "20000 hücre").
+export function formatT(template: string, vars: Record<string, string | number>): string {
+  return template.replace(/\{(\w+)\}/g, (m, key) => (key in vars ? String(vars[key]) : m));
+}
+
+// Intl.NumberFormat/toLocaleDateString icin BCP-47 locale kodu (tr -> tr-TR, en -> en-US).
+export function intlLocale(locale: Locale): string {
+  return locale === "en" ? "en-US" : "tr-TR";
 }
 
 // Istemci bilesenlerinde locale okuma (cookie tabanli)

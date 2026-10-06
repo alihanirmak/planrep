@@ -47,7 +47,7 @@ export default function AiPage() {
     setBusy(false);
     if (!res.ok) {
       const b = await res.json().catch(() => ({}));
-      setError(b.note ?? "Soru çözümlenemedi — daha açık ifade etmeyi dene");
+      setError(b.note ?? t("err.aiUnresolved"));
       return;
     }
     setAnswer(await res.json());

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { getConnectorInstance } from "@/lib/connectors";
+import { getServerT } from "@/lib/i18n-server";
 
 const schema = z.object({
   connector: z.number().int(),
@@ -22,8 +23,9 @@ export async function POST(req: Request) {
     const result = await instance.connector.fetchRows(parsed.data.source, 20);
     return NextResponse.json(result);
   } catch (e) {
+    const { t } = await getServerT();
     return NextResponse.json(
-      { error: "fetch_failed", message: e instanceof Error ? e.message : "hata" },
+      { error: "fetch_failed", message: e instanceof Error ? e.message : t("err.generic") },
       { status: 502 }
     );
   }

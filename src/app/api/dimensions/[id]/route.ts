@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { sqlite } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
+import { getServerT } from "@/lib/i18n-server";
 
 export async function GET(
   _req: Request,
@@ -86,8 +87,9 @@ export async function DELETE(
     .prepare("SELECT COUNT(*) AS c FROM model_dimensions WHERE dimension_id = ?")
     .get(id) as { c: number };
   if (used.c > 0) {
+    const { t } = await getServerT();
     return NextResponse.json(
-      { error: "in_use", message: "Bu boyut bir model tarafından kullanılıyor" },
+      { error: "in_use", message: t("err.dimensionInUse") },
       { status: 400 }
     );
   }

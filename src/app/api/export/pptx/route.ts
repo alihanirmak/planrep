@@ -3,6 +3,8 @@ import PptxGenJS from "pptxgenjs";
 import { getSession } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
 import { exportPayloadSchema } from "@/lib/export-schema";
+import { getServerT } from "@/lib/i18n-server";
+import { intlLocale } from "@/lib/i18n";
 
 const STYLE_MAP: Record<string, { color?: string; fill?: string }> = {
   "red-text": { color: "CC0000" },
@@ -26,9 +28,10 @@ export async function POST(req: Request) {
       );
     }
     const body = parsed.data;
+    const { locale, t } = await getServerT();
 
-    const name = body.name?.trim() || "Rapor";
-    const nf = new Intl.NumberFormat("tr-TR", {
+    const name = body.name?.trim() || t("export.defaultName");
+    const nf = new Intl.NumberFormat(intlLocale(locale), {
       maximumFractionDigits: body.decimals ?? 0,
       minimumFractionDigits: body.decimals ?? 0,
     });
@@ -41,7 +44,7 @@ export async function POST(req: Request) {
     cover.background = { color: "1E293B" };
     cover.addText("PlanRep", { x: 0.8, y: 2.2, w: 11.7, h: 1, fontSize: 40, bold: true, color: "FFFFFF" });
     cover.addText(name, { x: 0.8, y: 3.3, w: 11.7, h: 0.8, fontSize: 24, color: "93C5FD" });
-    cover.addText(new Date().toLocaleDateString("tr-TR"), { x: 0.8, y: 4.1, w: 11.7, h: 0.5, fontSize: 14, color: "94A3B8" });
+    cover.addText(new Date().toLocaleDateString(intlLocale(locale)), { x: 0.8, y: 4.1, w: 11.7, h: 0.5, fontSize: 14, color: "94A3B8" });
 
     type Cell = { text: string; options?: Record<string, unknown> };
     const headerRows: Cell[][] = body.headerRows.map((hr, i) => [
@@ -71,7 +74,7 @@ export async function POST(req: Request) {
       }),
     ]);
     const totalCells: Cell[] = [
-      { text: "Genel Toplam", options: { bold: true, fill: { color: "E2E8F0" } } },
+      { text: t("export.grandTotal"), options: { bold: true, fill: { color: "E2E8F0" } } },
       ...body.totals.map((sc) => ({
         text: sc.v != null ? nf.format(sc.v) : "—",
         options: { bold: true, align: "right" as const, fill: { color: "E2E8F0" } },

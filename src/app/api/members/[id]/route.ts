@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { sqlite } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
+import { getServerT } from "@/lib/i18n-server";
 
 const patchSchema = z.object({
   name: z.string().min(1).max(120).optional(),
@@ -92,8 +93,9 @@ export async function DELETE(
     .prepare("SELECT COUNT(*) AS c FROM dimension_members WHERE parent_id = ?")
     .get(id) as { c: number };
   if (children.c > 0) {
+    const { t } = await getServerT();
     return NextResponse.json(
-      { error: "has_children", message: "Önce alt üyeleri silinmeli" },
+      { error: "has_children", message: t("err.memberHasChildren") },
       { status: 400 }
     );
   }

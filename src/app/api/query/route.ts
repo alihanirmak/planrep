@@ -3,6 +3,8 @@ import { z } from "zod";
 import { getSession } from "@/lib/auth";
 import { runQuery } from "@/lib/query";
 import { MAX_AGGREGATE_RESULT_ROWS } from "@/lib/fact-filters";
+import { formatT } from "@/lib/i18n";
+import { getServerT } from "@/lib/i18n-server";
 
 const bodySchema = z.object({
   modelId: z.number().int(),
@@ -25,10 +27,11 @@ export async function POST(req: Request) {
   const pagination = page != null && pageSize != null ? { page, pageSize } : undefined;
   const result = runQuery(modelId, rowDim, colDim, filters, session.id, pagination);
   if ("error" in result) {
-    const message =
-      result.error === "result_too_large"
-        ? `Sonuç seti çok büyük (üst sınır: ${MAX_AGGREGATE_RESULT_ROWS} hücre). Lütfen filtre ekleyin veya sayfalama kullanın.`
-        : undefined;
+    let message: string | undefined;
+    if (result.error === "result_too_large") {
+      const { t } = await getServerT();
+      message = formatT(t("err.resultTooLarge"), { max: MAX_AGGREGATE_RESULT_ROWS });
+    }
     return NextResponse.json({ ...result, message }, { status: 400 });
   }
   return NextResponse.json(result);

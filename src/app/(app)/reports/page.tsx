@@ -686,7 +686,7 @@ export default function ReportsPage() {
       body: JSON.stringify(payload),
     });
     if (!res.ok) {
-      setMsg("Export başarısız");
+      setMsg(t("export.exportFailed"));
       return;
     }
     downloadBlob(await res.blob(), `${safeName()}.${kind === "excel" ? "xlsx" : "pptx"}`);
