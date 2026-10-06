@@ -147,3 +147,69 @@ describe("compileFormula — SUM/AVG/MIN/MAX fonksiyonlari", () => {
     expect(f.run((ref) => ({ A: 1, B: 1 }[ref]))).toBe(0);
   });
 });
+
+describe("compileFormula — SUMIF fonksiyonu", () => {
+  it("tek kosul-deger ikilisinde kosul dogruysa degeri doner", () => {
+    const f = compileFormula("SUMIF([ACTUAL]>[BUDGET]; [ACTUAL])");
+    expect(f.run((ref) => ({ ACTUAL: 150, BUDGET: 100 }[ref]))).toBe(150);
+  });
+
+  it("kosul yanlissa o ikili toplama dahil olmaz", () => {
+    const f = compileFormula("SUMIF([ACTUAL]>[BUDGET]; [ACTUAL])");
+    expect(f.run((ref) => ({ ACTUAL: 50, BUDGET: 100 }[ref]))).toBeUndefined();
+  });
+
+  it("birden fazla kosul-deger ikilisini destekler, eslesenleri toplar", () => {
+    const f = compileFormula("SUMIF([A1]>[B1]; [A1]; [A2]>[B2]; [A2]; [A3]>[B3]; [A3])");
+    const get = (ref: string) =>
+      ({ A1: 150, B1: 100, A2: 50, B2: 100, A3: 200, B3: 100 } as Record<string, number>)[ref];
+    // A1>B1 (150>100) dogru -> 150; A2>B2 (50>100) yanlis -> atlanir; A3>B3 (200>100) dogru -> 200
+    expect(f.run(get)).toBe(350);
+  });
+
+  it("tum kosullar yanlissa veya eksikse sonuc undefined olur", () => {
+    const f = compileFormula("SUMIF([A]>[B]; [A]; [C]>[D]; [C])");
+    expect(f.run((ref) => ({ A: 1, B: 10, C: 1, D: 10 }[ref]))).toBeUndefined();
+  });
+
+  it("kosuldaki referans eksikse (undefined) o ikili atlanir", () => {
+    const f = compileFormula("SUMIF([A]>[B]; [A]; [C]>[D]; [C])");
+    // A/B eksik -> ilk kosul hesaplanamaz (atlanir); C>D (20>10) dogru -> 20
+    expect(f.run((ref) => ({ C: 20, D: 10 }[ref]))).toBe(20);
+  });
+
+  it("tum karsilastirma operatorlerini destekler", () => {
+    const get = () => undefined;
+    expect(compileFormula("SUMIF(1>0; 5)").run(get)).toBe(5);
+    expect(compileFormula("SUMIF(1<2; 5)").run(get)).toBe(5);
+    expect(compileFormula("SUMIF(2>=2; 5)").run(get)).toBe(5);
+    expect(compileFormula("SUMIF(2<=2; 5)").run(get)).toBe(5);
+    expect(compileFormula("SUMIF(2=2; 5)").run(get)).toBe(5);
+    expect(compileFormula("SUMIF(2<>3; 5)").run(get)).toBe(5);
+  });
+
+  it("gercek senaryo: butceyi asan hesaplarin toplami", () => {
+    const f = compileFormula("SUMIF([ACTUAL1]>[BUDGET1]; [ACTUAL1]; [ACTUAL2]>[BUDGET2]; [ACTUAL2])");
+    const get = (ref: string) =>
+      ({ ACTUAL1: 120, BUDGET1: 100, ACTUAL2: 80, BUDGET2: 100 } as Record<string, number>)[ref];
+    expect(f.run(get)).toBe(120);
+  });
+
+  it("baska ifadelerle birlesebilir: SUMIF(...)*2", () => {
+    const f = compileFormula("SUMIF([A]>0; [A])*2");
+    expect(f.run((ref) => ({ A: 10 }[ref]))).toBe(20);
+  });
+
+  it("ikililerdeki tum referanslar refs listesine dahil olur", () => {
+    const f = compileFormula("SUMIF([A]>[B]; [C])");
+    expect(f.refs.sort()).toEqual(["A", "B", "C"].sort());
+  });
+
+  it("eksik ikili (SUMIF(cond)) hata firlatir", () => {
+    expect(() => compileFormula("SUMIF([A]>0)")).toThrow();
+  });
+
+  it("bos SUMIF() hata firlatir", () => {
+    expect(() => compileFormula("SUMIF()")).toThrow();
+  });
+});

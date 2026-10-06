@@ -1037,7 +1037,8 @@ export default function ReportsPage() {
                 </div>
               )}
               <div className="mt-1 text-[10px] text-slate-400">
-                Fonksiyonlar: IF(kosul;evet;hayır), SUM(...), AVG(...), MIN(...), MAX(...) — argümanlar{" "}
+                Fonksiyonlar: IF(kosul;evet;hayır), SUM(...), AVG(...), MIN(...), MAX(...),
+                SUMIF(kosul1;değer1;kosul2;değer2;...) — argümanlar{" "}
                 <code>;</code> ile ayrılır. Zaman ofseti: <code>[2026-03.PY]</code> (önceki yıl),{" "}
                 <code>[2026-03.MOVAVG(3)]</code> (hareketli ortalama).
               </div>

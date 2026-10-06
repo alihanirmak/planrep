@@ -1,8 +1,13 @@
 // Guvenli formul motoru: [KOLON_KODU] referanslari, + - * / ( ) sayilar,
-// karsilastirma operatorleri (> < >= <= = <>) ve fonksiyonlar: IF, SUM, AVG, MIN, MAX.
+// karsilastirma operatorleri (> < >= <= = <>) ve fonksiyonlar: IF, SUM, AVG, MIN, MAX, SUMIF.
 // Fonksiyon argumanlari noktali virgul (;) ile ayrilir (tr-TR Excel/EGER
 // konvansiyonu); virgul sadece ondalik ayirici olarak kullanilir.
 // Ornek: IF([ACTUAL]>[BUDGET]; ([ACTUAL]-[BUDGET])/[BUDGET]*100; 0)
+// SUMIF ornegi: SUMIF([ACTUAL]>[BUDGET]; [ACTUAL]; [ACTUAL2]>[BUDGET2]; [ACTUAL2])
+//   — kosul-deger ikilileri alir, kosulu dogru olanlarin degerini toplar
+//     (Excel SUMIF'in bu DSL'de tek satirlik skalar degerler uzerinde calisan
+//     karsiligi; "range" kavrami yok, bunun yerine her ikili ayri bir kosul/deger
+//     cifti olarak verilir).
 
 type Tok =
   | { t: "num"; v: number }
@@ -90,7 +95,8 @@ type Ast =
   | { k: "bin"; op: "+" | "-" | "*" | "/"; l: Ast; r: Ast }
   | { k: "neg"; e: Ast }
   | { k: "if"; cond: CondAst; then: Ast; else: Ast }
-  | { k: "call"; name: "SUM" | "AVG" | "MIN" | "MAX"; args: Ast[] };
+  | { k: "call"; name: "SUM" | "AVG" | "MIN" | "MAX"; args: Ast[] }
+  | { k: "sumif"; pairs: Array<{ cond: CondAst; value: Ast }> };
 
 type CondAst = { l: Ast; op: ">" | "<" | ">=" | "<=" | "=" | "<>"; r: Ast };
 
@@ -176,6 +182,22 @@ function parse(toks: Tok[]): Ast {
         expect("rp");
         return { k: "call", name: name as "SUM" | "AVG" | "MIN" | "MAX", args };
       }
+      if (name === "SUMIF") {
+        const pairs: Array<{ cond: CondAst; value: Ast }> = [];
+        const readPair = () => {
+          const c = cond();
+          expect("sep");
+          const v = expr();
+          pairs.push({ cond: c, value: v });
+        };
+        readPair();
+        while (peek()?.t === "sep") {
+          pos++;
+          readPair();
+        }
+        expect("rp");
+        return { k: "sumif", pairs };
+      }
       throw new Error(`Bilinmeyen fonksiyon: ${name}`);
     }
     throw new Error("Formül çözümlenemedi");
@@ -253,6 +275,18 @@ function evalAst(ast: Ast, get: Getter): number | undefined {
           return Math.max(...vals);
       }
     }
+    case "sumif": {
+      // Kosulu dogru olan ikililerin degerini toplar; kosulu eksik referans
+      // nedeniyle hesaplanamayan (undefined) veya yanlis olan ikililer atlanir
+      // (SUM/AVG ile ayni "eksigi atla" felsefesi). Hic eslesen ikili yoksa
+      // (veya eslesenlerin degeri eksikse) sonuc undefined olur.
+      const vals = ast.pairs
+        .filter((p) => evalCond(p.cond, get) === true)
+        .map((p) => evalAst(p.value, get))
+        .filter((v): v is number => v != null);
+      if (vals.length === 0) return undefined;
+      return vals.reduce((a, b) => a + b, 0);
+    }
   }
 }
 
@@ -276,6 +310,13 @@ function collectRefs(ast: Ast, out: string[]) {
       break;
     case "call":
       for (const a of ast.args) collectRefs(a, out);
+      break;
+    case "sumif":
+      for (const p of ast.pairs) {
+        collectRefs(p.cond.l, out);
+        collectRefs(p.cond.r, out);
+        collectRefs(p.value, out);
+      }
       break;
   }
 }
