@@ -361,6 +361,16 @@ for (const migration of [
   "ALTER TABLE fact_audit ADD COLUMN old_value8 REAL",
   "ALTER TABLE fact_audit ADD COLUMN new_value8 REAL",
   "ALTER TABLE business_rules ADD COLUMN measure_code TEXT",
+  // AI ile Gelistirme ozelliginin (bkz. lib/ai/dev-actions.ts) olusturdugu
+  // kayitlari insan-olusturdugundan ayirt etmek icin UI'da rozet gostermeye
+  // yarar — SADECE goruntuleme amacli, hicbir yetki/davranis kontrolu bu
+  // kolona DAYANMAZ (dev-actions.ts zaten kendi role/limit kontrollerini
+  // bagimsiz yapiyor).
+  "ALTER TABLE models ADD COLUMN created_by_ai INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE dimensions ADD COLUMN created_by_ai INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE model_measures ADD COLUMN created_by_ai INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE reports ADD COLUMN created_by_ai INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE uploads ADD COLUMN created_by_ai INTEGER NOT NULL DEFAULT 0",
 ]) {
   try {
     sqlite.exec(migration);

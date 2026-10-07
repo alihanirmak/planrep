@@ -14,6 +14,7 @@ type ReportRow = {
   definition: string;
   shared: number;
   version: number;
+  created_by_ai: number;
 };
 
 function getReport(id: number, tenantId: number): ReportRow | undefined {
@@ -31,6 +32,7 @@ function toClientShape(r: ReportRow) {
     shared: r.shared === 1,
     definition: JSON.parse(r.definition),
     version: r.version,
+    createdByAi: !!r.created_by_ai,
   };
 }
 

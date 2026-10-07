@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getT, readLocaleClient } from "@/lib/i18n";
+import AiBadge from "@/components/AiBadge";
 
 type DimRow = {
   id: number;
@@ -13,6 +14,7 @@ type DimRow = {
   description: string | null;
   visibility: "public" | "private";
   ownerModelName: string | null;
+  createdByAi?: boolean | number;
   members: Array<{ id: number }>;
   usedIn: Array<{ id: number; name: string }>;
 };
@@ -21,6 +23,7 @@ type Model = {
   code: string;
   name: string;
   description: string | null;
+  createdByAi?: boolean | number;
   dims: Array<{ id: number; code: string; name: string }>;
 };
 
@@ -280,7 +283,10 @@ export default function ModelingPage() {
                 onClick={() => router.push(`/modeling/models/${m.id}`)}
                 className="cursor-pointer hover:bg-blue-50/50"
               >
-                <td className="px-5 py-3 font-medium">🧊 {m.name}</td>
+                <td className="px-5 py-3 font-medium">
+                  🧊 {m.name}
+                  {m.createdByAi ? <AiBadge className="ml-2" /> : null}
+                </td>
                 <td className="px-5 py-3 font-mono text-xs text-slate-400">{m.code}</td>
                 <td className="px-5 py-3 text-xs text-slate-500">
                   {m.dims.map((d) => d.name).join(" × ")}
@@ -323,7 +329,10 @@ export default function ModelingPage() {
                 onClick={() => router.push(`/modeling/dimensions/${d.id}`)}
                 className="cursor-pointer hover:bg-blue-50/50"
               >
-                <td className="px-5 py-3 font-medium">❖ {d.name}</td>
+                <td className="px-5 py-3 font-medium">
+                  ❖ {d.name}
+                  {d.createdByAi ? <AiBadge className="ml-2" /> : null}
+                </td>
                 <td className="px-5 py-3 font-mono text-xs text-slate-400">{d.code}</td>
                 <td className="px-5 py-3 text-xs">{TYPE_LABEL[d.type] ?? d.type}</td>
                 <td className="px-5 py-3 text-xs">

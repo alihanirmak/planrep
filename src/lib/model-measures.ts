@@ -21,6 +21,7 @@ export type MeasureInfo = {
   code: string;
   name: string;
   slot: number;
+  createdByAi: boolean;
 };
 
 type Row = {
@@ -29,10 +30,11 @@ type Row = {
   code: string;
   name: string;
   slot: number;
+  created_by_ai: number;
 };
 
 function mapRow(r: Row): MeasureInfo {
-  return { id: r.id, modelId: r.model_id, code: r.code, name: r.name, slot: r.slot };
+  return { id: r.id, modelId: r.model_id, code: r.code, name: r.name, slot: r.slot, createdByAi: !!r.created_by_ai };
 }
 
 // Slot numarasindan facts/fact_audit tablosundaki fiziksel deger kolonunun
@@ -62,7 +64,7 @@ export function getModelMeasures(modelId: number): MeasureInfo[] {
 export function listEffectiveMeasures(modelId: number): MeasureInfo[] {
   const real = getModelMeasures(modelId);
   if (real.length > 0) return real;
-  return [{ id: 0, modelId, code: DEFAULT_MEASURE_CODE, name: "Değer", slot: 1 }];
+  return [{ id: 0, modelId, code: DEFAULT_MEASURE_CODE, name: "Değer", slot: 1, createdByAi: false }];
 }
 
 export function getMeasure(id: number): MeasureInfo | null {
@@ -82,7 +84,12 @@ export class MeasureLimitError extends Error {
 // (mevcut "value" kolonunu) alir — var olan tekil-deger modelleri icin bu,
 // o modelin SANAL "VALUE" olcusunu ARTIK ACIKCA ADLANDIRILMIS bir satira
 // donusturur (fiziksel veri/kolon degismez, sadece isimlendirme kalicilasir).
-export function createModelMeasure(input: { modelId: number; code: string; name: string }): MeasureInfo {
+export function createModelMeasure(input: {
+  modelId: number;
+  code: string;
+  name: string;
+  createdByAi?: boolean;
+}): MeasureInfo {
   const existing = getModelMeasures(input.modelId);
   if (existing.length >= MAX_MODEL_MEASURES) throw new MeasureLimitError();
   const usedSlots = new Set(existing.map((m) => m.slot));
@@ -92,9 +99,9 @@ export function createModelMeasure(input: { modelId: number; code: string; name:
   const id = Number(
     sqlite
       .prepare(
-        "INSERT INTO model_measures (model_id, code, name, slot, created_at) VALUES (?,?,?,?,?)"
+        "INSERT INTO model_measures (model_id, code, name, slot, created_at, created_by_ai) VALUES (?,?,?,?,?,?)"
       )
-      .run(input.modelId, input.code, input.name, slot, now).lastInsertRowid
+      .run(input.modelId, input.code, input.name, slot, now, input.createdByAi ? 1 : 0).lastInsertRowid
   );
   return getMeasure(id)!;
 }

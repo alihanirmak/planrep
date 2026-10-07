@@ -25,6 +25,7 @@ import { compileFormula } from "@/lib/formula";
 import PivotGrid, { STYLE_CLASS } from "@/components/PivotGrid";
 import MemberPicker from "@/components/MemberPicker";
 import DrillModal from "@/components/DrillModal";
+import AiBadge from "@/components/AiBadge";
 import { getT, readLocaleClient } from "@/lib/i18n";
 import { useVersionConflict } from "@/lib/hooks/useVersionConflict";
 import { useHotkey } from "@/lib/shortcuts";
@@ -32,7 +33,7 @@ import { useHotkey } from "@/lib/shortcuts";
 type Dim = PivotDim & { id: number; slot: number };
 type MeasureInfo = { id: number; modelId: number; code: string; name: string; slot: number };
 type Model = { id: number; code: string; name: string; dims: Dim[]; measures?: MeasureInfo[] };
-type SavedReport = { id: number; name: string; ownerName: string; shared: number; mine: boolean };
+type SavedReport = { id: number; name: string; ownerName: string; shared: number; mine: boolean; createdByAi?: boolean | number };
 type Comment = {
   id: number;
   cellKey: string | null;
@@ -229,6 +230,7 @@ export default function ReportsPage() {
   const [reportName, setReportName] = useState("Yeni Rapor");
   const [shared, setShared] = useState(false);
   const [isMine, setIsMine] = useState(true);
+  const [currentCreatedByAi, setCurrentCreatedByAi] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [mode, setMode] = useState<"edit" | "view">("edit");
 
@@ -585,6 +587,7 @@ export default function ReportsPage() {
     setReportName("Yeni Rapor");
     setShared(false);
     setIsMine(true);
+    setCurrentCreatedByAi(false);
     setCalcColumns([]);
     setCalcRows([]);
     setCondRules([]);
@@ -603,6 +606,7 @@ export default function ReportsPage() {
     setCurrentId(r.id);
     setShared(r.shared);
     setIsMine(r.mine);
+    setCurrentCreatedByAi(!!r.createdByAi);
     versionGuard.syncVersion(r.version);
     applyDef(def, r.name);
     loadComments(r.id);
@@ -921,6 +925,7 @@ export default function ReportsPage() {
           <option value="">— Yeni rapor —</option>
           {saved.map((r) => (
             <option key={r.id} value={r.id}>
+              {r.createdByAi ? "🤖 " : ""}
               {r.name}
               {!r.mine ? ` (${r.ownerName})` : ""}
               {r.shared ? " 🔗" : ""}
@@ -936,6 +941,7 @@ export default function ReportsPage() {
         ) : (
           <span className="px-1 text-sm font-semibold text-slate-800">{reportName}</span>
         )}
+        {currentCreatedByAi && <AiBadge />}
 
         <span className="mx-1 h-5 w-px bg-slate-200" />
         <IconBtn icon="💾" title={currentId != null && isMine ? "Güncelle" : "Kaydet"} onClick={() => save()} />

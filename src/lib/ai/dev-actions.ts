@@ -276,7 +276,7 @@ export async function runPlan(plan: DevPlan, ctx: PlanContext, dryRun: boolean):
       id = Number(
         sqlite
           .prepare(
-            "INSERT INTO dimensions (tenant_id, code, name, type, visibility) VALUES (?,?,?,?,'public')"
+            "INSERT INTO dimensions (tenant_id, code, name, type, visibility, created_by_ai) VALUES (?,?,?,?,'public',1)"
           )
           .run(ctx.tenantId, action.code, action.name, action.dimType).lastInsertRowid
       );
@@ -342,7 +342,7 @@ export async function runPlan(plan: DevPlan, ctx: PlanContext, dryRun: boolean):
     } else {
       id = Number(
         sqlite
-          .prepare("INSERT INTO models (tenant_id, code, name, description, created_at) VALUES (?,?,?,?,?)")
+          .prepare("INSERT INTO models (tenant_id, code, name, description, created_at, created_by_ai) VALUES (?,?,?,?,?,1)")
           .run(ctx.tenantId, action.code, action.name, action.description ?? null, new Date().toISOString())
           .lastInsertRowid
       );
@@ -411,7 +411,7 @@ export async function runPlan(plan: DevPlan, ctx: PlanContext, dryRun: boolean):
         message: `Yeni ölçü: ${action.code} (${action.name}) — model: ${action.modelCode}`,
       };
     }
-    const measure = createModelMeasure({ modelId: model.id, code: action.code, name: action.name });
+    const measure = createModelMeasure({ modelId: model.id, code: action.code, name: action.name, createdByAi: true });
     logAudit(ctx.userId, "ai_dev.create_measure", "model_measure", measure.id, {
       modelCode: action.modelCode,
       code: action.code,
@@ -469,7 +469,7 @@ export async function runPlan(plan: DevPlan, ctx: PlanContext, dryRun: boolean):
     const id = Number(
       sqlite
         .prepare(
-          "INSERT INTO reports (tenant_id, name, owner_id, model_id, definition, shared, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)"
+          "INSERT INTO reports (tenant_id, name, owner_id, model_id, definition, shared, created_at, updated_at, created_by_ai) VALUES (?,?,?,?,?,?,?,?,1)"
         )
         .run(ctx.tenantId, action.name, ctx.userId, model.id, JSON.stringify(definition), action.shared ? 1 : 0, now, now)
         .lastInsertRowid
@@ -517,7 +517,7 @@ export async function runPlan(plan: DevPlan, ctx: PlanContext, dryRun: boolean):
     const uploadId = Number(
       sqlite
         .prepare(
-          "INSERT INTO uploads (model_id, filename, user_id, row_count, status, created_at) VALUES (?,?,?,?,'done',?)"
+          "INSERT INTO uploads (model_id, filename, user_id, row_count, status, created_at, created_by_ai) VALUES (?,?,?,?,'done',?,1)"
         )
         .run(model.id, "AI ile geliştirme", ctx.userId, action.rows.length, now).lastInsertRowid
     );
@@ -874,7 +874,7 @@ SADECE şu JSON şemasında yanıt ver, başka açıklama yazma, TÜM istenen d�
     const uploadId = Number(
       sqlite
         .prepare(
-          "INSERT INTO uploads (model_id, filename, user_id, row_count, status, created_at) VALUES (?,?,?,?,'done',?)"
+          "INSERT INTO uploads (model_id, filename, user_id, row_count, status, created_at, created_by_ai) VALUES (?,?,?,?,'done',?,1)"
         )
         .run(model.id, "AI tahmin", ctx.userId, futurePeriods.length, now).lastInsertRowid
     );

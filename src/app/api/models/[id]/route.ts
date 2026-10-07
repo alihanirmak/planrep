@@ -16,14 +16,14 @@ export async function GET(
 
   const model = sqlite
     .prepare(
-      "SELECT id, code, name, description, created_at AS createdAt FROM models WHERE id = ? AND tenant_id = ?"
+      "SELECT id, code, name, description, created_at AS createdAt, created_by_ai AS createdByAi FROM models WHERE id = ? AND tenant_id = ?"
     )
     .get(id, session.tenantId);
   if (!model) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
   const dims = sqlite
     .prepare(
-      `SELECT d.id, d.code, d.name, d.type, d.visibility, md.slot,
+      `SELECT d.id, d.code, d.name, d.type, d.visibility, d.created_by_ai AS createdByAi, md.slot,
               (SELECT COUNT(*) FROM dimension_members dm WHERE dm.dimension_id = d.id) AS memberCount
        FROM model_dimensions md JOIN dimensions d ON d.id = md.dimension_id
        WHERE md.model_id = ? ORDER BY md.slot`
@@ -37,7 +37,7 @@ export async function GET(
   ).c;
   const uploads = sqlite
     .prepare(
-      `SELECT u.id, u.filename, u.row_count AS rowCount, u.status, u.created_at AS createdAt,
+      `SELECT u.id, u.filename, u.row_count AS rowCount, u.status, u.created_at AS createdAt, u.created_by_ai AS createdByAi,
               usr.name AS userName
        FROM uploads u LEFT JOIN users usr ON usr.id = u.user_id
        WHERE u.model_id = ? ORDER BY u.id DESC LIMIT 5`

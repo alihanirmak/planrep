@@ -71,8 +71,12 @@ describe("runPlan — create_dimension", () => {
     };
     const results = await da.runPlan(plan, ctx(), false);
     expect(results[0].status).toBe("created");
-    const row = sqlite.prepare("SELECT id FROM dimensions WHERE code = 'DEVREGION'").get() as { id: number };
+    const row = sqlite.prepare("SELECT id, created_by_ai AS createdByAi FROM dimensions WHERE code = 'DEVREGION'").get() as {
+      id: number;
+      createdByAi: number;
+    };
     expect(row).toBeDefined();
+    expect(row.createdByAi).toBe(1);
     const members = sqlite
       .prepare("SELECT code FROM dimension_members WHERE dimension_id = ?")
       .all(row.id) as Array<{ code: string }>;
@@ -113,8 +117,12 @@ describe("runPlan — create_model", () => {
     };
     const results = await da.runPlan(plan, ctx(), false);
     expect(results[0].status).toBe("created");
-    const row = sqlite.prepare("SELECT id FROM models WHERE code = 'DEVSALES'").get() as { id: number };
+    const row = sqlite.prepare("SELECT id, created_by_ai AS createdByAi FROM models WHERE code = 'DEVSALES'").get() as {
+      id: number;
+      createdByAi: number;
+    };
     expect(row).toBeDefined();
+    expect(row.createdByAi).toBe(1);
     const dims = sqlite
       .prepare("SELECT dimension_id FROM model_dimensions WHERE model_id = ?")
       .all(row.id);
@@ -156,6 +164,10 @@ describe("runPlan — create_measure", () => {
     expect(results.filter((r) => r.status === "created").length).toBe(8);
     expect(results[8].status).toBe("error");
     expect(results[8].message).toContain("en fazla");
+    const row = sqlite.prepare("SELECT created_by_ai AS createdByAi FROM model_measures WHERE code = 'M0'").get() as {
+      createdByAi: number;
+    };
+    expect(row.createdByAi).toBe(1);
   });
 
   it("viewer rolu olcu olusturamaz", async () => {
@@ -182,8 +194,11 @@ describe("runPlan — create_report", () => {
     };
     const results = await da.runPlan(plan, ctx(), false);
     expect(results[0].status).toBe("created");
-    const row = sqlite.prepare("SELECT id FROM reports WHERE name = 'Test Rapor'").get();
+    const row = sqlite.prepare("SELECT id, created_by_ai AS createdByAi FROM reports WHERE name = 'Test Rapor'").get() as
+      | { id: number; createdByAi: number }
+      | undefined;
     expect(row).toBeDefined();
+    expect(row?.createdByAi).toBe(1);
   });
 
   it("modelin sahip olmadigi bir boyut verilirse hata doner", async () => {

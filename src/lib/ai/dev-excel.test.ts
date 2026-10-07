@@ -66,11 +66,12 @@ describe("parseExcelToDevPlan — mevcut modele veri ekleme senaryosu", () => {
     code: "SALES",
     name: "Satış",
     description: null,
+    createdByAi: false,
     dims: [
       { id: 1, code: "BOLGE", name: "Bölge", type: "standard", slot: 1, members: [] },
       { id: 2, code: "ZAMAN", name: "Zaman", type: "time", slot: 2, members: [] },
     ],
-    measures: [{ id: 1, modelId: 42, code: "TUTAR", name: "Tutar", slot: 1 }],
+    measures: [{ id: 1, modelId: 42, code: "TUTAR", name: "Tutar", slot: 1, createdByAi: false }],
   };
 
   it("basliklar mevcut boyut/olculerle eslesirse yeni boyut/model/olcu onerilmez, sadece veri yuklenir", async () => {

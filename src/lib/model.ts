@@ -23,7 +23,7 @@ export type DimInfo = {
   members: Member[];
 };
 
-export type MeasureInfo = { id: number; modelId: number; code: string; name: string; slot: number };
+export type MeasureInfo = { id: number; modelId: number; code: string; name: string; slot: number; createdByAi: boolean };
 
 export type ModelInfo = {
   id: number;
@@ -32,12 +32,13 @@ export type ModelInfo = {
   description: string | null;
   dims: DimInfo[];
   measures: MeasureInfo[];
+  createdByAi: boolean;
 };
 
 export function getModels(tenantId: number): ModelInfo[] {
   const models = sqlite
-    .prepare("SELECT id, code, name, description FROM models WHERE tenant_id = ? ORDER BY id")
-    .all(tenantId) as Array<{ id: number; code: string; name: string; description: string | null }>;
+    .prepare("SELECT id, code, name, description, created_by_ai AS createdByAi FROM models WHERE tenant_id = ? ORDER BY id")
+    .all(tenantId) as Array<{ id: number; code: string; name: string; description: string | null; createdByAi: number }>;
   if (models.length === 0) return [];
 
   const modelIds = models.map((m) => m.id);
@@ -66,19 +67,20 @@ export function getModels(tenantId: number): ModelInfo[] {
   // notu) — UI'nin "henuz hic olcu tanimlanmadi" durumunu ayirt edebilmesi icin.
   const measureRows = sqlite
     .prepare(
-      `SELECT id, model_id AS modelId, code, name, slot FROM model_measures
+      `SELECT id, model_id AS modelId, code, name, slot, created_by_ai AS createdByAi FROM model_measures
        WHERE model_id IN (${phModels}) ORDER BY model_id, slot`
     )
-    .all(...modelIds) as MeasureInfo[];
+    .all(...modelIds) as Array<Omit<MeasureInfo, "createdByAi"> & { createdByAi: number }>;
   const measuresByModel = new Map<number, MeasureInfo[]>();
   for (const m of measureRows) {
     const arr = measuresByModel.get(m.modelId) ?? [];
-    arr.push(m);
+    arr.push({ ...m, createdByAi: !!m.createdByAi });
     measuresByModel.set(m.modelId, arr);
   }
 
   return models.map((m) => ({
     ...m,
+    createdByAi: !!m.createdByAi,
     dims: dimsByModel.get(m.id) ?? [],
     measures: measuresByModel.get(m.id) ?? [],
   }));

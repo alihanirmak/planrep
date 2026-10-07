@@ -9,7 +9,7 @@ export async function GET() {
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const dims = sqlite
     .prepare(
-      `SELECT d.id, d.code, d.name, d.type, d.description, d.visibility,
+      `SELECT d.id, d.code, d.name, d.type, d.description, d.visibility, d.created_by_ai AS createdByAi,
               d.owner_model_id AS ownerModelId, m.name AS ownerModelName
        FROM dimensions d LEFT JOIN models m ON m.id = d.owner_model_id
        WHERE d.tenant_id = ?

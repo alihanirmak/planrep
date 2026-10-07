@@ -47,7 +47,7 @@ describe("valueColumnForSlot / auditColumnsForSlot", () => {
 describe("listEffectiveMeasures — geriye uyumluluk", () => {
   it("hic measure tanimlanmamis modelde sanal varsayilan tekil olcuyu doner", () => {
     const effective = mm.listEffectiveMeasures(modelId);
-    expect(effective).toEqual([{ id: 0, modelId, code: "VALUE", name: "Değer", slot: 1 }]);
+    expect(effective).toEqual([{ id: 0, modelId, code: "VALUE", name: "Değer", slot: 1, createdByAi: false }]);
   });
 
   it("getModelMeasures (gercek DB satirlari) bos doner", () => {
@@ -141,7 +141,7 @@ describe("createModelMeasure / getModelMeasures / listEffectiveMeasures", () => 
     mm.deleteModelMeasure(solo.id);
     expect(mm.getModelMeasures(soloModelId)).toEqual([]);
     expect(mm.listEffectiveMeasures(soloModelId)).toEqual([
-      { id: 0, modelId: soloModelId, code: "VALUE", name: "Değer", slot: 1 },
+      { id: 0, modelId: soloModelId, code: "VALUE", name: "Değer", slot: 1, createdByAi: false },
     ]);
   });
 });

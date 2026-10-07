@@ -12,7 +12,7 @@ export async function GET() {
   const rows = sqlite
     .prepare(
       `SELECT r.id, r.name, r.owner_id AS ownerId, u.name AS ownerName, r.model_id AS modelId,
-              r.shared, r.updated_at AS updatedAt
+              r.shared, r.updated_at AS updatedAt, r.created_by_ai AS createdByAi
        FROM reports r LEFT JOIN users u ON u.id = r.owner_id
        WHERE r.tenant_id = ? AND (r.owner_id = ? OR r.shared = 1)
        ORDER BY r.updated_at DESC`

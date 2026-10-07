@@ -813,3 +813,58 @@ Tamamlanan Faz 3 maddeleri (hepsi ayrı commit):
   "Genişletme" alt-maddesi olarak eklendi (kapsam/tasarım kararları +
   kasıtlı olarak kapsam dışı bırakılanlarla).
 - **Henüz commit edilmedi** — sıradaki adım commit+push.
+
+## 2026-10-07 — AI-üretimi görsel ayırıcı (rozet) eklendi
+
+- Kullanıcı "AI ile üretilenlere AI ile üretildiğini anlatan bir ayırıcı
+  koysak iyi olur bence ne dersin" dedi — basit ama değerli bir UX
+  iyileştirmesi, hiçbir netleştirme sorusu gerektirmedi (kapsam açık,
+  tasarım tek bir mantıklı yol).
+- **Veri modeli:** `created_by_ai INTEGER NOT NULL DEFAULT 0` kolonu 5
+  tabloya eklendi — `models`, `dimensions`, `model_measures`, `reports`,
+  `uploads`. **Kasıtlı olarak eklenmeyenler:** `dimension_members` (AI'nın
+  oluşturduğu bir boyutun ÜYE bazında işaretlenmesi gereksiz granülerlik
+  olurdu — boyutun kendisi zaten işaretli) ve `comments` (AI yorumları
+  zaten metinlerinde `🤖` öneki taşıyor, `dev-actions.ts`'teki
+  `insertComment` çağrılarında — ayrı bir kolon gerekmedi).
+- **Mimari karar — kolon SADECE görüntüleme amaçlı:** Hiçbir yetki/iş
+  mantığı bu kolona dayanmıyor (`dev-actions.ts` zaten kendi bağımsız
+  role/limit kontrollerini yapıyor) — bu bilinçli bir ayrım, "rozet
+  gösterme" ile "güvenlik kararı verme" sorumluluklarının birbirine
+  karışmaması için.
+- **Keşif — `lib/model-measures.ts`'te DUPLICATE bir `MeasureInfo` tipi
+  bulundu:** `lib/model.ts` ve `lib/model-measures.ts` birbirinden
+  BAĞIMSIZ, aynı isimli (`MeasureInfo`) ama ayrı tanımlanmış iki tip
+  taşıyor (muhtemelen önceki bir oturumda kopyala-yapıştır kalıntısı) —
+  bu oturumda İKİSİ de güncellendi (`createdByAi: boolean` eklendi),
+  TypeScript'in yapısal tipleme (duck typing) sayesinde ikisi arasında
+  örtük bir uyumluluk var, derleme hatası çıkmadı ama bu teknik borç
+  not edildi (ileride tek bir paylaşılan tipe birleştirilmeli).
+- **Backend akışı:** `lib/model.ts` `getModels()`/`ModelInfo` +
+  `lib/model-measures.ts` `MeasureInfo`/`listEffectiveMeasures`/
+  `createModelMeasure` (yeni opsiyonel `createdByAi` parametresi) →
+  `/api/models`, `/api/models/[id]`, `/api/dimensions`, `/api/reports`,
+  `/api/reports/[id]` route'larının ham SQL `SELECT`'lerine
+  `created_by_ai AS createdByAi` eklendi (bazıları `SELECT *` kullandığı
+  için otomatik geldi, bazıları açık kolon listesi kullandığı için
+  manuel eklendi). `dev-actions.ts`'teki TÜM `INSERT` ifadeleri (5 eylem
+  türü + `forecast_measure`'ın oluşturduğu upload) `created_by_ai=1`
+  yazacak şekilde güncellendi.
+- **UI:** Yeni paylaşılan `components/AiBadge.tsx` (mor "🤖 AI" rozeti,
+  tek satırlık basit bileşen) — `/modeling` sayfasındaki model/boyut
+  tablolarına, model detay sayfasının boyutlar/ölçüler/yüklemeler
+  tablolarına, ve `/reports` sayfasına (kayıtlı rapor seçicisinde metin
+  öneki olarak — `<option>` içine JSX bileşeni konulamadığından; açık
+  raporun başlığının yanında gerçek rozet olarak) eklendi.
+- 3 mevcut teste (`dev-actions.test.ts`'teki `create_dimension`/
+  `create_model`/`create_measure`/`create_report` senaryolarına)
+  `created_by_ai=1` doğrulaması eklendi — yeni ayrı bir test dosyası
+  AÇILMADI, zaten var olan "dryRun=false gerçekten yazar" testlerine
+  entegre edildi (gereksiz test şişkinliğinden kaçınmak için) — toplam
+  test sayısı **380'de sabit kaldı** (yeni assertion eklendi, yeni test
+  eklenmedi). `tsc --noEmit` temiz, `eslint` 0 hata (1 önceden var olan
+  ilişkisiz uyarı), `next build` başarılı. Gerçek dev DB'de migration
+  doğrulandı (5 tablonun hepsinde `created_by_ai` kolonu mevcut).
+- `docs/ROADMAP.md`'deki "AI ile Geliştirme" bölümüne bu özellik
+  "Görsel ayırıcı" alt-maddesi olarak eklendi.
+- **Henüz commit edilmedi** — sıradaki adım commit+push.

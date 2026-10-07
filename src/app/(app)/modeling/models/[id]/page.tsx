@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import MemberPicker from "@/components/MemberPicker";
+import AiBadge from "@/components/AiBadge";
 import type { Member } from "@/lib/pivot";
 
 type ModelDetail = {
@@ -12,6 +13,7 @@ type ModelDetail = {
   name: string;
   description: string | null;
   createdAt: string;
+  createdByAi?: boolean | number;
   dims: Array<{
     id: number;
     code: string;
@@ -20,8 +22,9 @@ type ModelDetail = {
     visibility: string;
     slot: number;
     memberCount: number;
+    createdByAi?: boolean | number;
   }>;
-  measures: Array<{ id: number; modelId: number; code: string; name: string; slot: number }>;
+  measures: Array<{ id: number; modelId: number; code: string; name: string; slot: number; createdByAi?: boolean | number }>;
   factCount: number;
   reportCount: number;
   uploads: Array<{
@@ -31,6 +34,7 @@ type ModelDetail = {
     status: string;
     createdAt: string;
     userName: string | null;
+    createdByAi?: boolean | number;
   }>;
 };
 
@@ -206,6 +210,7 @@ export default function ModelDetailPage() {
       <div className="mt-2 flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-bold text-slate-800">🧊 {model.name}</h1>
         <span className="font-mono text-xs text-slate-400">{model.code}</span>
+        {model.createdByAi ? <AiBadge /> : null}
         {role === "admin" && (
           <button
             onClick={removeModel}
@@ -268,6 +273,7 @@ export default function ModelDetailPage() {
                 <td className="px-5 py-3 font-medium">
                   {TYPE_ICON[d.type] ?? "❖"} {d.name}
                   <span className="ml-2 font-mono text-xs font-normal text-slate-400">{d.code}</span>
+                  {d.createdByAi ? <AiBadge className="ml-2" /> : null}
                 </td>
                 <td className="px-5 py-3 text-xs">{d.type}</td>
                 <td className="px-5 py-3 text-xs">
@@ -350,7 +356,10 @@ export default function ModelDetailPage() {
                 <tr key={m.id}>
                   <td className="px-5 py-3 font-mono text-xs text-slate-400">v{m.slot}</td>
                   <td className="px-5 py-3 font-mono text-xs">{m.code}</td>
-                  <td className="px-5 py-3 font-medium">{m.name}</td>
+                  <td className="px-5 py-3 font-medium">
+                    {m.name}
+                    {m.createdByAi ? <AiBadge className="ml-2" /> : null}
+                  </td>
                   <td className="px-5 py-3 text-right">
                     {role === "admin" && (
                       <button onClick={() => removeMeasure(m)} className="text-xs text-red-500 hover:underline">
@@ -375,7 +384,10 @@ export default function ModelDetailPage() {
           <tbody className="divide-y divide-slate-100 text-slate-700">
             {model.uploads.map((u) => (
               <tr key={u.id}>
-                <td className="px-5 py-2.5">{u.filename}</td>
+                <td className="px-5 py-2.5">
+                  {u.filename}
+                  {u.createdByAi ? <AiBadge className="ml-2" /> : null}
+                </td>
                 <td className="px-5 py-2.5 text-xs text-slate-400">{u.userName}</td>
                 <td className="px-5 py-2.5 text-right text-xs tabular-nums">{u.rowCount} satır</td>
                 <td className="px-5 py-2.5 text-right">
