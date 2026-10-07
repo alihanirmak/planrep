@@ -28,6 +28,16 @@ const EXAMPLES = [
   'RAPOR SALES "Bölgesel Satış" SATIR=REGION SUTUN=TIME',
 ];
 
+// Bu ornekler SADECE axet-code CLI mevcutken calisir (dogal dil -> JSON
+// plan cevirisi gerektirir) — yukaridaki EXAMPLES'teki basit "MODEL/BOYUT/
+// OLCU/RAPOR" komutlari axet olmadan da (yapilandirilmis metin fallback'i
+// ile) calisir, bunlar calismaz.
+const ADVANCED_EXAMPLES = [
+  "SALES modelinde bölge bazında satış anomalilerini analiz et ve Bölgesel Satış raporuna yorum olarak ekle",
+  "SALES modelinde ACTUAL versiyonundan 3 dönem ileriye tahmin yap, FORECAST versiyonuna yaz",
+  'Bölgesel Satış raporuna FORECAST versiyonunu karşılaştırma olarak ekle',
+];
+
 export default function AiDevPage() {
   const t = getT(readLocaleClient());
   const [message, setMessage] = useState("");
@@ -137,6 +147,21 @@ export default function AiDevPage() {
               key={ex}
               onClick={() => setMessage((m) => (m ? `${m}\n${ex}` : ex))}
               className="rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-500 hover:border-blue-300 hover:text-blue-600"
+            >
+              {ex}
+            </button>
+          ))}
+        </div>
+        <p className="mt-3 text-xs text-slate-400">
+          🧠 Gelişmiş (anomali analizi, tahmin, rapor karşılaştırma, yorum ekleme) — SADECE axet-code CLI
+          mevcutken çalışır:
+        </p>
+        <div className="mt-1 flex flex-wrap gap-2">
+          {ADVANCED_EXAMPLES.map((ex) => (
+            <button
+              key={ex}
+              onClick={() => setMessage(ex)}
+              className="rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-xs text-violet-600 hover:border-violet-300"
             >
               {ex}
             </button>

@@ -4,6 +4,12 @@ import { MAX_MODEL_DIMENSIONS, getModelDims } from "../model";
 import { MAX_MODEL_MEASURES, listEffectiveMeasures, createModelMeasure } from "../model-measures";
 import { upsertFacts } from "../facts-write";
 import { logAudit } from "../audit";
+import { runQuery } from "../query";
+import { runAxet, axetAvailable } from "./axet-cli";
+import { extractJson } from "./nl2report";
+import { getServerT } from "../i18n-server";
+import { versionedUpdate } from "../version-guard";
+import type { ReportDefV2 } from "../report-types";
 import type { Role } from "../session";
 
 // ============================================================================
@@ -75,6 +81,51 @@ export const devActionSchema = z.discriminatedUnion("type", [
       .min(1)
       .max(5000),
   }),
+  z.object({
+    // Salt-okunur analiz — axet CLI'ye verinin bir ozetini gonderip anormal
+    // gorunen hucreleri bulmasini ister. HICBIR facts/model yazimi yapmaz;
+    // SADECE istege bagli olarak bir rapora/hucreye yorum (comment) ekler
+    // (bu da onizlemede yazilmaz, sadece apply'da).
+    type: z.literal("analyze_anomalies"),
+    modelCode: z.string().min(1),
+    rowDim: z.string().min(1),
+    colDim: z.string().min(1),
+    filters: z.record(z.string(), z.array(z.string())).optional(),
+    measureCode: z.string().max(40).optional(),
+    attachToReport: z.string().max(120).optional(),
+    attachCellComments: z.boolean().optional(),
+  }),
+  z.object({
+    // VERSION tipi boyutta TEK bir koordinat kesiti (filters'ta diger TUM
+    // boyutlar icin TAM OLARAK bir deger) uzerinde axet CLI ile ileri donuk
+    // tahmin uretir, hedef VERSION uyesi yoksa olusturur ve tahmini SADECE
+    // birincil (slot 1) olcuye yazar.
+    type: z.literal("forecast_measure"),
+    modelCode: z.string().min(1),
+    timeDim: z.string().min(1),
+    sourceVersionCode: z.string().min(1),
+    targetVersionCode: codeSchema,
+    targetVersionName: z.string().min(1).max(120),
+    periods: z.number().int().min(1).max(24),
+    filters: z.record(z.string(), z.array(z.string())).optional(),
+    measureCode: z.string().max(40).optional(),
+  }),
+  z.object({
+    // Var olan bir raporun VERSION filtresine/sutununa yeni kodlar ekler
+    // (karsilastirma amacli) — SADECE raporun SAHIBI guncelleyebilir (REST
+    // /api/reports/[id] PUT ile AYNI kural, admin istisnasi dahi YOK).
+    type: z.literal("update_report_add_comparison"),
+    reportName: z.string().min(1).max(120),
+    versionCodes: z.array(z.string().min(1)).min(1).max(10),
+  }),
+  z.object({
+    type: z.literal("create_comment"),
+    reportName: z.string().min(1).max(120),
+    target: z.enum(["report", "cell"]).default("report"),
+    cellRowCode: z.string().optional(),
+    cellColCode: z.string().optional(),
+    text: z.string().min(1).max(2000),
+  }),
 ]);
 
 export type DevAction = z.infer<typeof devActionSchema>;
@@ -113,8 +164,11 @@ type ModelRef = { id: number; code: string; dimCodes: string[] };
 // onizlemesi icindir. dryRun=false: gercek DB yazimi (apply). Ayni fonksiyon
 // her iki modda da KULLANILIR ki onizleme ile gercek uygulama arasinda
 // davranis farki (ve dolayisiyla "onizlemede guvenli gorunup uygulamada
-// farkli davranma" riski) olmasin.
-export function runPlan(plan: DevPlan, ctx: PlanContext, dryRun: boolean): ActionResult[] {
+// farkli davranma" riski) olmasin. ASYNC: analyze_anomalies/forecast_measure
+// axet CLI'yi cagirir (ag/surec gecikmesi) — eylemler SIRALI (await ile,
+// paralel DEGIL) calistirilir ki axet CLI'ye ayni anda cok sayida istek
+// gitmesin ve hata mesajlari eylem sirasina sadik kalsin.
+export async function runPlan(plan: DevPlan, ctx: PlanContext, dryRun: boolean): Promise<ActionResult[]> {
   const results: ActionResult[] = [];
   // Bu calistirma sirasinda (henuz commit edilmemis olsa da dryRun'da
   // simule edilen) olusturulan/bilinen boyut ve modelleri izler — ayni
@@ -161,7 +215,7 @@ export function runPlan(plan: DevPlan, ctx: PlanContext, dryRun: boolean): Actio
   for (let index = 0; index < plan.actions.length; index++) {
     const action = plan.actions[index];
     try {
-      results.push(executeOne(action, index));
+      results.push(await executeOne(action, index));
     } catch (e) {
       results.push({
         index,
@@ -173,7 +227,7 @@ export function runPlan(plan: DevPlan, ctx: PlanContext, dryRun: boolean): Actio
   }
   return results;
 
-  function executeOne(action: DevAction, index: number): ActionResult {
+  function executeOne(action: DevAction, index: number): Promise<ActionResult> | ActionResult {
     switch (action.type) {
       case "create_dimension":
         return doCreateDimension(action, index);
@@ -185,6 +239,14 @@ export function runPlan(plan: DevPlan, ctx: PlanContext, dryRun: boolean): Actio
         return doCreateReport(action, index);
       case "upload_facts":
         return doUploadFacts(action, index);
+      case "analyze_anomalies":
+        return doAnalyzeAnomalies(action, index);
+      case "forecast_measure":
+        return doForecastMeasure(action, index);
+      case "update_report_add_comparison":
+        return doUpdateReportComparison(action, index);
+      case "create_comment":
+        return doCreateComment(action, index);
     }
   }
 
@@ -485,5 +547,474 @@ export function runPlan(plan: DevPlan, ctx: PlanContext, dryRun: boolean): Actio
       message: `${action.rows.length} veri satırı yüklendi`,
       entityId: uploadId,
     };
+  }
+
+  // --- Rapor/yorum okuma-yazma yardimcilari (analyze_anomalies/
+  // update_report_add_comparison/create_comment TARAFINDAN paylasilir) ---
+
+  type ReportRow = {
+    id: number;
+    name: string;
+    owner_id: number;
+    model_id: number;
+    definition: string;
+    shared: number;
+    version: number;
+  };
+
+  function findReportByName(name: string): ReportRow | null {
+    const row = sqlite
+      .prepare(
+        `SELECT id, name, owner_id, model_id, definition, shared, version FROM reports
+         WHERE tenant_id = ? AND name = ? AND (owner_id = ? OR shared = 1)
+         ORDER BY id DESC LIMIT 1`
+      )
+      .get(ctx.tenantId, name, ctx.userId) as ReportRow | undefined;
+    return row ?? null;
+  }
+
+  // /api/reports/[id] PUT ile BIREBIR AYNI kural: sadece SAHIP guncelleyebilir
+  // (admin istisnasi dahi YOK — mevcut REST route'un davranisina sadik kalinir).
+  function canWriteReport(report: ReportRow): boolean {
+    return report.owner_id === ctx.userId;
+  }
+
+  // lib/access.ts canAccessCommentEntity ile AYNI kural (report: sahip/
+  // paylasilan/admin okuyabilir-yorum-ekleyebilir; cell: SADECE admin).
+  function canCreateComment(target: "report" | "cell", report: ReportRow): boolean {
+    if (target === "cell") return ctx.role === "admin";
+    return ctx.role === "admin" || report.owner_id === ctx.userId || report.shared === 1;
+  }
+
+  function insertComment(entityType: "report" | "cell", entityId: number, cellKey: string | null, text: string) {
+    sqlite
+      .prepare(
+        "INSERT INTO comments (entity_type, entity_id, cell_key, user_id, text, created_at) VALUES (?,?,?,?,?,?)"
+      )
+      .run(entityType, String(entityId), cellKey, ctx.userId, text, new Date().toISOString());
+  }
+
+  // --- analyze_anomalies: salt-okunur analiz, axet CLI'ye verinin bir
+  // ozetini gonderip anormal gorunen hucreleri bulmasini ister. ---
+  async function doAnalyzeAnomalies(
+    action: Extract<DevAction, { type: "analyze_anomalies" }>,
+    index: number
+  ): Promise<ActionResult> {
+    const model = findModel(action.modelCode);
+    if (!model) {
+      return { index, type: action.type, status: "error", message: `Model bulunamadı: ${action.modelCode}` };
+    }
+    if (model.id < 0) {
+      return {
+        index,
+        type: action.type,
+        status: "skipped",
+        message: "Model henüz commit edilmedi, analiz bir sonraki çalıştırmada yapılabilir.",
+      };
+    }
+    if (!dimsHave(model, [action.rowDim, action.colDim])) {
+      return { index, type: action.type, status: "error", message: "rowDim/colDim modelin boyutu değil" };
+    }
+    const result = runQuery(model.id, action.rowDim, action.colDim, action.filters ?? {}, ctx.userId, undefined, action.measureCode);
+    if ("error" in result) {
+      return { index, type: action.type, status: "error", message: `Sorgu hatası: ${result.error}` };
+    }
+    if (!axetAvailable()) {
+      return {
+        index,
+        type: action.type,
+        status: "error",
+        message: "Anomali analizi axet-code CLI gerektiriyor, şu an erişilemiyor.",
+      };
+    }
+    const { t } = await getServerT();
+    const rowsForPrompt = result.rows.slice(0, 30);
+    const colsForPrompt = result.cols.slice(0, 24);
+    const lines = rowsForPrompt.map(
+      (r) => `${r.code} (${r.name}): ` + colsForPrompt.map((c) => `${c.code}=${r.cells[c.code] ?? 0}`).join(", ")
+    );
+    const prompt = `Sen bir planlama/raporlama uygulamasında veri analistisin. Aşağıdaki tabloda (satır: ${action.rowDim}, sütun: ${action.colDim}, model: ${action.modelCode}) anormal görünen (beklenenden çok yüksek/düşük, ani sıçrama, negatif olmaması gereken yerde negatif vb.) hücreleri bul.
+
+Veri:
+${lines.join("\n")}
+
+SADECE şu JSON şemasında yanıt ver, başka açıklama yazma:
+{"summary":"kısa Türkçe özet","findings":[{"row":"SATIR_KODU","col":"SUTUN_KODU","reason":"neden anormal"}]}
+En fazla 20 bulgu döndür. Hiçbir anormallik yoksa findings:[] ve summary:"Anormallik bulunamadı" döndür.`;
+
+    let parsed: { summary: string; findings: Array<{ row: string; col?: string; reason: string }> };
+    try {
+      const output = await runAxet(prompt, t);
+      const json = extractJson(output);
+      const schema = z.object({
+        summary: z.string().max(1000).optional().default(""),
+        findings: z
+          .array(z.object({ row: z.string(), col: z.string().optional(), reason: z.string().max(300) }))
+          .max(20)
+          .optional()
+          .default([]),
+      });
+      const validated = schema.safeParse(json);
+      if (!validated.success) {
+        return { index, type: action.type, status: "error", message: "axet yanıtı anlaşılamadı" };
+      }
+      parsed = validated.data;
+    } catch (e) {
+      return {
+        index,
+        type: action.type,
+        status: "error",
+        message: e instanceof Error ? e.message.slice(0, 200) : "axet çağrısı başarısız",
+      };
+    }
+
+    let commentNote = "";
+    if (action.attachToReport) {
+      const report = findReportByName(action.attachToReport);
+      if (!report) {
+        commentNote = ` (rapor bulunamadı: ${action.attachToReport}, yorum eklenemedi)`;
+      } else if (!canCreateComment("report", report)) {
+        commentNote = " (bu rapora yorum ekleme yetkiniz yok)";
+      } else if (!dryRun) {
+        insertComment(
+          "report",
+          report.id,
+          null,
+          `🤖 AI anomali analizi: ${parsed.summary || "Anormallik bulunamadı"}`
+        );
+        commentNote = ` (rapor yorumu eklendi: ${action.attachToReport})`;
+        if (action.attachCellComments && parsed.findings.length > 0) {
+          if (ctx.role !== "admin") {
+            commentNote += " [hücre yorumları atlandı: admin değil]";
+          } else {
+            for (const f of parsed.findings) {
+              insertComment("cell", report.id, `${f.row}|${f.col ?? "TOPLAM"}`, `🤖 ${f.reason}`);
+            }
+            commentNote += ` + ${parsed.findings.length} hücre yorumu`;
+          }
+        }
+      } else {
+        commentNote = ` (onaylanırsa rapor yorumu eklenecek: ${action.attachToReport})`;
+      }
+    }
+
+    return {
+      index,
+      type: action.type,
+      status: "created",
+      message: `Analiz: ${parsed.summary || "Anormallik bulunamadı"} (${parsed.findings.length} bulgu)${commentNote}`,
+    };
+  }
+
+  // --- forecast_measure: TEK bir koordinat kesiti uzerinde axet CLI ile
+  // ileri donuk tahmin uretir, hedef VERSION uyesini (yoksa) olusturur ve
+  // tahmini SADECE birincil (slot 1) olcuye yazar. ---
+  async function doForecastMeasure(
+    action: Extract<DevAction, { type: "forecast_measure" }>,
+    index: number
+  ): Promise<ActionResult> {
+    if (viewerBlocked(ctx)) {
+      return { index, type: action.type, status: "error", message: "Bu rol tahmin yazamaz (viewer)" };
+    }
+    const model = findModel(action.modelCode);
+    if (!model) {
+      return { index, type: action.type, status: "error", message: `Model bulunamadı: ${action.modelCode}` };
+    }
+    if (model.id < 0) {
+      return {
+        index,
+        type: action.type,
+        status: "skipped",
+        message: "Model henüz commit edilmedi, tahmin bir sonraki çalıştırmada yapılabilir.",
+      };
+    }
+    const dims = getModelDims(model.id);
+    const timeDim = dims.find((d) => d.code === action.timeDim);
+    if (!timeDim) {
+      return { index, type: action.type, status: "error", message: `Zaman boyutu bulunamadı: ${action.timeDim}` };
+    }
+    const versionDim = dims.find((d) => d.type === "version");
+    if (!versionDim) {
+      return { index, type: action.type, status: "error", message: "Model bir VERSION boyutuna sahip değil" };
+    }
+    if (!versionDim.members.some((m) => m.code === action.sourceVersionCode)) {
+      return {
+        index,
+        type: action.type,
+        status: "error",
+        message: `Kaynak versiyon bulunamadı: ${action.sourceVersionCode}`,
+      };
+    }
+    if (action.targetVersionCode === action.sourceVersionCode) {
+      return { index, type: action.type, status: "error", message: "Hedef versiyon kaynaktan farklı olmalı" };
+    }
+    // Tahmin TEK bir koordinat kesiti uzerinde calisir: zaman ve versiyon
+    // disindaki HER boyut icin filters'ta TAM OLARAK bir deger belirtilmis
+    // olmali (aksi halde "hangi satirin tahmin edildigi" belirsizlesir).
+    for (const d of dims) {
+      if (d.code === timeDim.code || d.code === versionDim.code) continue;
+      const vals = action.filters?.[d.code];
+      if (!vals || vals.length !== 1) {
+        return {
+          index,
+          type: action.type,
+          status: "error",
+          message: `"${d.code}" için filters'ta tek bir değer belirtmelisiniz (tahmin tek bir koordinat kesiti için çalışır)`,
+        };
+      }
+    }
+    const measures = listEffectiveMeasures(model.id);
+    const targetMeasure =
+      (action.measureCode ? measures.find((m) => m.code === action.measureCode) : undefined) ??
+      measures.find((m) => m.slot === 1) ??
+      measures[0];
+    if (targetMeasure.slot !== 1) {
+      return {
+        index,
+        type: action.type,
+        status: "error",
+        message: "Tahmin şu an sadece birincil (slot 1) ölçü için desteklenir",
+      };
+    }
+
+    const queryFilters = { ...(action.filters ?? {}), [versionDim.code]: [action.sourceVersionCode] };
+    const result = runQuery(model.id, versionDim.code, timeDim.code, queryFilters, ctx.userId, undefined, action.measureCode);
+    if ("error" in result) {
+      return { index, type: action.type, status: "error", message: `Sorgu hatası: ${result.error}` };
+    }
+    const row = result.rows.find((r) => r.code === action.sourceVersionCode);
+    if (!row || Object.keys(row.cells).length === 0) {
+      return { index, type: action.type, status: "error", message: "Kaynak versiyon için geçmiş veri bulunamadı" };
+    }
+    const history = result.cols.map((c) => ({ code: c.code, name: c.name, value: row.cells[c.code] ?? 0 }));
+
+    const allTimeMembers = [...timeDim.members].sort((a, b) => a.orderIdx - b.orderIdx);
+    const lastDataCode = history[history.length - 1]?.code;
+    const lastIdx = allTimeMembers.findIndex((m) => m.code === lastDataCode);
+    const futurePeriods = (lastIdx < 0 ? [] : allTimeMembers.slice(lastIdx + 1)).slice(0, action.periods);
+    if (futurePeriods.length === 0) {
+      return {
+        index,
+        type: action.type,
+        status: "error",
+        message:
+          "Boyutta tahmin için gelecek dönem üyesi tanımlı değil (önce ilgili zaman boyutuna gelecek dönemler eklenmeli)",
+      };
+    }
+
+    if (!axetAvailable()) {
+      return {
+        index,
+        type: action.type,
+        status: "error",
+        message: "Tahmin için axet-code CLI gerekiyor, şu an erişilemiyor.",
+      };
+    }
+    const { t } = await getServerT();
+    const histLines = history.map((h) => `${h.code} (${h.name}) = ${h.value}`).join("\n");
+    const futureCodes = futurePeriods.map((f) => f.code);
+    const prompt = `Sen bir planlama/raporlama uygulamasında zaman serisi tahmin uzmanısın. Model: ${action.modelCode}, Ölçü: ${targetMeasure.name}.
+
+Geçmiş veri (kronolojik sıra):
+${histLines}
+
+Aşağıdaki GELECEK dönemler için tahmini sayısal değer üret: ${futureCodes.join(", ")}
+
+SADECE şu JSON şemasında yanıt ver, başka açıklama yazma, TÜM istenen dönem kodlarını içermeli:
+{"values": {"${futureCodes[0]}": 0}}`;
+
+    let forecastValues: Record<string, number>;
+    try {
+      const output = await runAxet(prompt, t);
+      const json = extractJson(output);
+      const schema = z.object({ values: z.record(z.string(), z.number()) });
+      const validated = schema.safeParse(json);
+      if (!validated.success) {
+        return { index, type: action.type, status: "error", message: "axet yanıtı anlaşılamadı" };
+      }
+      const missing = futureCodes.filter((c) => !(c in validated.data.values));
+      if (missing.length > 0) {
+        return {
+          index,
+          type: action.type,
+          status: "error",
+          message: `axet yanıtı eksik dönemler içeriyor: ${missing.join(", ")}`,
+        };
+      }
+      forecastValues = validated.data.values;
+    } catch (e) {
+      return {
+        index,
+        type: action.type,
+        status: "error",
+        message: e instanceof Error ? e.message.slice(0, 200) : "axet çağrısı başarısız",
+      };
+    }
+
+    const preview = futurePeriods.map((p) => `${p.code}=${forecastValues[p.code]}`).join(", ");
+    const targetExists = versionDim.members.some((m) => m.code === action.targetVersionCode);
+    if (dryRun) {
+      return {
+        index,
+        type: action.type,
+        status: "created",
+        message: `Tahmin (${preview}) → ${action.targetVersionCode}${
+          targetExists ? "" : " (yeni versiyon oluşturulacak)"
+        } versiyonuna yazılacak`,
+      };
+    }
+
+    if (!targetExists) {
+      sqlite
+        .prepare("INSERT INTO dimension_members (dimension_id, code, name, parent_id, order_idx) VALUES (?,?,?,?,?)")
+        .run(versionDim.id, action.targetVersionCode, action.targetVersionName, null, versionDim.members.length);
+    }
+
+    const now = new Date().toISOString();
+    const uploadId = Number(
+      sqlite
+        .prepare(
+          "INSERT INTO uploads (model_id, filename, user_id, row_count, status, created_at) VALUES (?,?,?,?,'done',?)"
+        )
+        .run(model.id, "AI tahmin", ctx.userId, futurePeriods.length, now).lastInsertRowid
+    );
+    const factRows = futurePeriods.map((p) => ({
+      coords: dims.map((d) => {
+        if (d.code === timeDim.code) return p.code;
+        if (d.code === versionDim.code) return action.targetVersionCode;
+        return action.filters![d.code][0];
+      }),
+      value: forecastValues[p.code],
+    }));
+    try {
+      upsertFacts(model.id, dims, factRows, uploadId, now, ctx.userId);
+    } catch (e) {
+      sqlite.prepare("UPDATE uploads SET status = 'failed' WHERE id = ?").run(uploadId);
+      throw e;
+    }
+    logAudit(ctx.userId, "ai_dev.forecast_measure", "upload", uploadId, {
+      modelCode: action.modelCode,
+      targetVersionCode: action.targetVersionCode,
+      periods: futureCodes,
+    });
+    return {
+      index,
+      type: action.type,
+      status: "created",
+      message: `Tahmin (${preview}) → ${action.targetVersionCode} versiyonuna yazıldı`,
+      entityId: uploadId,
+    };
+  }
+
+  // --- update_report_add_comparison: var olan bir raporun VERSION filtresine/
+  // sutununa yeni kodlar ekler. ---
+  async function doUpdateReportComparison(
+    action: Extract<DevAction, { type: "update_report_add_comparison" }>,
+    index: number
+  ): Promise<ActionResult> {
+    const report = findReportByName(action.reportName);
+    if (!report) {
+      return { index, type: action.type, status: "error", message: `Rapor bulunamadı: ${action.reportName}` };
+    }
+    if (!canWriteReport(report)) {
+      return { index, type: action.type, status: "error", message: "Bu raporu güncelleme yetkiniz yok (sahibi değilsiniz)" };
+    }
+    const dims = getModelDims(report.model_id);
+    const versionDim = dims.find((d) => d.type === "version");
+    if (!versionDim) {
+      return { index, type: action.type, status: "error", message: "Raporun modeli bir VERSION boyutuna sahip değil" };
+    }
+    const validCodes = new Set(versionDim.members.map((m) => m.code));
+    const missing = action.versionCodes.filter((c) => !validCodes.has(c));
+    if (missing.length > 0) {
+      return { index, type: action.type, status: "error", message: `Geçersiz versiyon kodu: ${missing.join(", ")}` };
+    }
+    const def = JSON.parse(report.definition) as ReportDefV2;
+    const cols = def.cols.includes(versionDim.code) || def.rows.includes(versionDim.code)
+      ? def.cols
+      : [...def.cols, versionDim.code];
+    const filters = {
+      ...def.filters,
+      [versionDim.code]: [...new Set([...(def.filters[versionDim.code] ?? []), ...action.versionCodes])],
+    };
+    const newDef: ReportDefV2 = { ...def, cols, filters };
+
+    if (dryRun) {
+      return {
+        index,
+        type: action.type,
+        status: "created",
+        message: `"${action.reportName}" raporuna ${action.versionCodes.join(", ")} karşılaştırması eklenecek`,
+      };
+    }
+
+    const result = versionedUpdate(
+      "reports",
+      report.id,
+      report.version,
+      undefined,
+      "definition = ?, updated_at = ?",
+      [JSON.stringify(newDef), new Date().toISOString()]
+    );
+    if (!result.ok) {
+      return { index, type: action.type, status: "error", message: "Rapor başka biri tarafından güncellenmiş (çakışma)" };
+    }
+    logAudit(ctx.userId, "ai_dev.update_report_add_comparison", "report", report.id, {
+      reportName: action.reportName,
+      versionCodes: action.versionCodes,
+    });
+    return {
+      index,
+      type: action.type,
+      status: "created",
+      message: `"${action.reportName}" raporuna ${action.versionCodes.join(", ")} karşılaştırması eklendi`,
+      entityId: report.id,
+    };
+  }
+
+  // --- create_comment: var olan bir rapora (veya hucresine) yorum ekler. ---
+  async function doCreateComment(
+    action: Extract<DevAction, { type: "create_comment" }>,
+    index: number
+  ): Promise<ActionResult> {
+    const report = findReportByName(action.reportName);
+    if (!report) {
+      return { index, type: action.type, status: "error", message: `Rapor bulunamadı: ${action.reportName}` };
+    }
+    if (!canCreateComment(action.target, report)) {
+      return {
+        index,
+        type: action.type,
+        status: "error",
+        message:
+          action.target === "cell" ? "Hücre yorumu sadece admin ekleyebilir" : "Bu rapora yorum ekleme yetkiniz yok",
+      };
+    }
+    if (action.target === "cell" && !action.cellRowCode) {
+      return { index, type: action.type, status: "error", message: "Hücre yorumu için cellRowCode gerekli" };
+    }
+    const cellKey = action.target === "cell" ? `${action.cellRowCode}|${action.cellColCode ?? "TOPLAM"}` : null;
+    if (dryRun) {
+      return {
+        index,
+        type: action.type,
+        status: "created",
+        message: `"${action.reportName}" raporuna yorum eklenecek${cellKey ? ` (hücre: ${cellKey})` : ""}`,
+      };
+    }
+    insertComment(action.target, report.id, cellKey, action.text);
+    logAudit(ctx.userId, "ai_dev.create_comment", "report", report.id, { reportName: action.reportName, cellKey });
+    return {
+      index,
+      type: action.type,
+      status: "created",
+      message: `"${action.reportName}" raporuna yorum eklendi${cellKey ? ` (hücre: ${cellKey})` : ""}`,
+      entityId: report.id,
+    };
+  }
+
+  function dimsHave(model: ModelRef, codes: string[]): boolean {
+    const set = new Set(model.dimCodes);
+    return codes.every((c) => set.has(c));
   }
 }

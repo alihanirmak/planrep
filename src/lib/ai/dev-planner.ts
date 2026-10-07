@@ -9,22 +9,31 @@
 import { getModels, type ModelInfo } from "../model";
 import { getServerT } from "../i18n-server";
 import { formatT } from "../i18n";
+import { sqlite } from "../db";
 import { runAxet, axetAvailable } from "./axet-cli";
 import { devPlanSchema, type DevPlan } from "./dev-actions";
 
-export function buildDevPrompt(message: string, models: ModelInfo[]): string {
+export function buildDevPrompt(message: string, models: ModelInfo[], reportNames: string[]): string {
   const meta = models
     .map((m) => {
-      const dims = m.dims.map((d) => `${d.code} (${d.name})`).join(", ");
-      return `- ${m.code} (${m.name}): boyutlar [${dims}]`;
+      const dims = m.dims
+        .map((d) => {
+          const sample = d.members.slice(0, 20).map((mm) => mm.code).join(",");
+          return `${d.code} (${d.name}, tip=${d.type}${sample ? `, üyeler=[${sample}]` : ""})`;
+        })
+        .join("; ");
+      const measures = (m.measures ?? []).map((me) => me.code).join(",");
+      return `- ${m.code} (${m.name}): boyutlar [${dims}]${measures ? ` ölçüler=[${measures}]` : ""}`;
     })
     .join("\n");
 
-  return `Sen bir planlama/raporlama uygulamasında (PlanRep) model/boyut/ölçü/rapor OLUŞTURAN bir asistansın.
+  return `Sen bir planlama/raporlama uygulamasında (PlanRep) model/boyut/ölçü/rapor OLUŞTURAN, veri analiz eden ve tahmin üreten bir asistansın.
 Kullanıcının isteğini aşağıdaki SABİT eylem şemasına çevir. SADECE geçerli JSON döndür, başka hiçbir açıklama yazma.
 
 Mevcut modeller:
 ${meta || "(henüz model yok)"}
+
+Mevcut raporlar: ${reportNames.length > 0 ? reportNames.join(", ") : "(henüz rapor yok)"}
 
 Şema:
 {
@@ -34,14 +43,20 @@ ${meta || "(henüz model yok)"}
     {"type":"create_model","code":"KOD","name":"Ad","description":null,"dimensionCodes":["KOD1","KOD2"]},
     {"type":"create_measure","modelCode":"KOD","code":"KOD","name":"Ad"},
     {"type":"create_report","modelCode":"KOD","name":"Ad","rows":["KOD"],"cols":["KOD"],"filters":{},"shared":false},
-    {"type":"upload_facts","modelCode":"KOD","rows":[{"coords":{"BOYUT_KODU":"UYE_KODU"},"value":123}]}
+    {"type":"upload_facts","modelCode":"KOD","rows":[{"coords":{"BOYUT_KODU":"UYE_KODU"},"value":123}]},
+    {"type":"analyze_anomalies","modelCode":"KOD","rowDim":"KOD","colDim":"KOD","filters":{},"attachToReport":"RAPOR_ADI veya yok","attachCellComments":false},
+    {"type":"forecast_measure","modelCode":"KOD","timeDim":"ZAMAN_BOYUT_KODU","sourceVersionCode":"KAYNAK_VERSIYON","targetVersionCode":"HEDEF_VERSIYON","targetVersionName":"Ad","periods":3,"filters":{"DIGER_BOYUT":["TEK_DEGER"]}},
+    {"type":"update_report_add_comparison","reportName":"RAPOR_ADI","versionCodes":["KOD1","KOD2"]},
+    {"type":"create_comment","reportName":"RAPOR_ADI","target":"report|cell","cellRowCode":"KOD","cellColCode":"KOD","text":"yorum metni"}
   ]
 }
 
 Kurallar:
 - Kodlar SADECE harf/rakam/alt çizgi içerir, büyük harf kullan.
 - Var olan bir model/boyuda referans veriyorsan yukarıdaki listedeki KOD'u kullan, var olmayan bir şey oluşturuyorsan create_dimension/create_model ile ÖNCE tanımla.
-- business_rules, kullanıcı/rol, connector gibi eylemler YOK — sadece yukarıdaki 5 tür mevcut.
+- forecast_measure SADECE TEK bir koordinat kesiti için çalışır: timeDim/VERSION dışındaki HER boyut için filters'ta TAM OLARAK bir değer belirt.
+- analyze_anomalies/forecast_measure/update_report_add_comparison/create_comment SADECE var olan gerçek verfi/raporlar üzerinde çalışır — yeni oluşturulan bir model/rapora aynı plan içinde hemen bu eylemleri uygulama, önce o adımın gerçekten commit edilmesini (ayrı bir sohbet turunda) bekle.
+- business_rules, kullanıcı/rol, connector gibi eylemler YOK — sadece yukarıdaki 9 tür mevcut.
 - En fazla 30 eylem.
 
 İstek: ${message}`;
@@ -51,13 +66,16 @@ export type DevPlanResult = { plan: DevPlan | null; source: "axet" | "fallback";
 
 export async function planFromMessage(message: string, tenantId: number): Promise<DevPlanResult> {
   const models = getModels(tenantId);
+  const reportRows = sqlite
+    .prepare("SELECT DISTINCT name FROM reports WHERE tenant_id = ? ORDER BY name LIMIT 50")
+    .all(tenantId) as Array<{ name: string }>;
   const { t } = await getServerT();
   let note: string | null = null;
 
   if (axetAvailable()) {
     try {
       const output = await runAxet(
-        buildDevPrompt(message, models),
+        buildDevPrompt(message, models, reportRows.map((r) => r.name)),
         t,
         "stdin'deki görevi uygula ve SADECE istenen JSON'u döndür"
       );

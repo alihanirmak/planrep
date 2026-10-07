@@ -31,6 +31,6 @@ export async function POST(req: Request) {
   }
 
   const ctx: PlanContext = { tenantId: session.tenantId, userId: session.id, role: session.role };
-  const results = runPlan(parsed.data, ctx, false);
+  const results = await runPlan(parsed.data, ctx, false);
   return NextResponse.json({ results });
 }

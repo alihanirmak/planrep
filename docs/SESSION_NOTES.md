@@ -717,3 +717,99 @@ Tamamlanan Faz 3 maddeleri (hepsi ayrı commit):
 - `docs/ROADMAP.md`'ye yeni "Faz 4 — AI ile Geliştirme" bölümü eklendi
   (TAMAMLANDI, detaylı mimari/güvenlik özetiyle).
 - **Henüz commit edilmedi** — sıradaki adım commit+push.
+
+## 2026-10-07 — AI ile Geliştirme: anomali/tahmin/karşılaştırma/yorum zinciri eklendi
+
+- Kullanıcı az önce tamamlanan AI ile Geliştirme özelliğine şu senaryoyu
+  sordu: "Excel at → modelleme yap → anomali bul → ileri tahmin yap →
+  yeni versiyona yaz → rapora karşılaştırma ekle → yorum attır" uçtan uca
+  mümkün mü? Mevcut durumu tablo halinde özetledim (ilk adım zaten
+  çalışıyor, kalan 4 adım yoktu) ve kod yazmadan önce 4 `ask_user`
+  sorusuyla kapsamı netleştirdim: anomali/tahmin yöntemi **axet CLI**
+  (istatistiksel yedek YOK, kullanıcı özellikle axet'i seçti), tahminin
+  yazılacağı yer **yeni bir VERSION üyesi**, rapor entegrasyonu **ikisi
+  de** (var olanı güncelle + yeni oluştur zaten vardı), yorumlar **hem
+  rapor hem hücre seviyesinde ikisi de**.
+- **4 yeni sabit eylem türü** (`lib/ai/dev-actions.ts`'teki `devActionSchema`
+  discriminatedUnion'a eklendi — serbest kod/SQL çalıştırma YOK ilkesi
+  korunarak):
+  - `analyze_anomalies`: salt-okunur, `runQuery` + axet CLI yorumlaması,
+    bulguları opsiyonel olarak rapora/hücrelere yorum olarak ekler.
+  - `forecast_measure`: axet CLI ile zaman serisi tahmini, hedef VERSION
+    üyesi otomatik oluşturulur, tahmin yazılır.
+  - `update_report_add_comparison`: var olan raporun VERSION
+    filtresini/sütununu genişletir.
+  - `create_comment`: var olan rapora/hücresine yorum ekler.
+- **En kritik tasarım kararı — `update_report_add_comparison` için admin
+  istisnası EKLEMEDİM:** İlk refleksle "admin her zaman güncelleyebilsin"
+  yazmak isterken, gerçek `/api/reports/[id]` PUT route'unu tekrar
+  okudum — o route'ta `r.owner_id !== session.id` kontrolü var, `shared`
+  olsa DAHİ, çağıran admin olsa DAHİ başkasının raporunu güncelleyemiyor
+  (sadece OKUMA `shared`'a izin veriyor, YAZMA değil). "AI, bir insanın
+  UI üzerinden yapabileceğinden fazlasını yapamaz" ilkesine sadık kalmak
+  için AYNI kısıtlamayı (admin istisnası OLMADAN) uyguladım — bu, projenin
+  güvenlik felsefesiyle tutarlı olması için bilinçli bir "ekleme"
+  YAPMAMA kararıydı.
+- **`forecast_measure` kapsamını kasıtlı olarak sınırladım** (3 netleştirme):
+  (1) tahmin TEK bir koordinat kesiti için çalışır — zaman/versiyon
+  dışındaki her boyut için `filters`'ta tam olarak bir değer gerekir,
+  aksi halde "hangi satırın tahmin edildiği" belirsizleşirdi; (2) gelecek
+  dönemler İCAT EDİLMEZ, sadece zaten TANIMLI zaman boyutu üyeleri
+  arasından seçilir (axet'in rastgele "2026-13" gibi geçersiz bir dönem
+  kodu üretme riskini ortadan kaldırır); (3) sadece BİRİNCİL (slot 1)
+  ölçüye yazılabilir — ikincil bir ölçüye yazmak, o satırın slot-1
+  değerinin ne olacağı sorusunu (satır TAMAMEN YENİ olduğundan) çözümsüz
+  bırakırdı, bu yüzden `targetMeasure.slot !== 1` ise açık hata döner.
+- **Permission replikasyonu — gerçek `canAccessCommentEntity` import
+  edilmedi:** Bu fonksiyon tam bir `SessionUser` nesnesi istiyor
+  (email/name/locale/aiDevAccess dahil), ama `PlanContext`'te sadece
+  `tenantId/userId/role` var. Sahte bir `SessionUser` cast'lemek yerine,
+  dosyanın kendi "mirror the REST route" deseniyle tutarlı, 3 satırlık
+  yerel bir `canCreateComment`/`canWriteReport` kopyası yazıldı — davranış
+  BİREBİR AYNI, sadece gereksiz bir tip zorlaması yok.
+- **`runPlan` senkron → asenkron:** axet CLI çağrıları (anomali/tahmin)
+  nedeniyle `runPlan` artık `Promise<ActionResult[]>` döndürüyor, eylemler
+  `for` döngüsünde SIRALI (`await` ile, `Promise.all` DEĞİL) çalışıyor —
+  axet CLI'ye aynı anda çok sayıda istek gitmesin diye. 3 API route'u
+  (`plan`/`plan-from-excel`/`apply`) ve TÜM mevcut 13 testin `it()`
+  callback'leri `async`'e çevrilip `await da.runPlan(...)` eklendi.
+- **Bulunan ve düzeltilen 2 test hatası:**
+  1. Testler ilk çalıştırmada "axet mevcut değilken hata" senaryolarını
+     doğrulayamadı — çünkü bu geliştirme makinesinde axet-code CLI
+     FİİLEN kurulu (`fs.existsSync(AXET_BIN)` true dönüyor), bu yüzden
+     kod gerçekten axet'i çağırmaya çalıştı ve `next/headers` `cookies()`
+     bir Next.js istek bağlamı DIŞINDA (düz vitest testi) çağrıldığından
+     hata fırlattı. Düzeltme: test dosyasının `beforeAll`'ına
+     `process.env.AXET_DISABLE = "1"` eklendi — testler artık host
+     makinenin yerel kurulumundan TAMAMEN bağımsız, deterministik.
+  2. "Sahibi olmayan kullanıcı güncelleyemez" testi ilk denemede
+     "rapor bulunamadı" hatası aldı (beklenen "sahibi değilsiniz" değil)
+     — çünkü `findReportByName`'in SQL'i zaten `(owner_id = ? OR
+     shared = 1)` ile görünürlüğü filtreliyor, paylaşılmamış bir raporu
+     sahibi olmayan biri hiç GÖREMEZ bile (bu da projenin "404 döndür,
+     403 değil, kaynağın varlığını bile sızdırma" güvenlik felsefesiyle
+     tutarlı). Düzeltme: test raporu önce `shared=1` yapıldı (görünür
+     ama sahibi değil), böylece gerçekten "görebiliyor ama güncelleyemiyor"
+     senaryosu test edildi.
+- **`lib/ai/dev-planner.ts` prompt genişletmesi:** axet'e gönderilen
+  şema 5 eylemden 9'a çıkarıldı; modellerin boyut TİPİ (`standard`/
+  `time`/`version`) + örnek üye kodları + mevcut rapor adları da artık
+  prompt'a dahil ediliyor (axet'in `forecast_measure` için doğru
+  `timeDim`/`sourceVersionCode`, `update_report_add_comparison`/
+  `create_comment` için doğru `reportName` değerlerini seçebilmesi için).
+  Prompt'a "yeni oluşturulan bir model/rapora aynı plan içinde hemen bu
+  4 eylemi uygulama" uyarısı eklendi (bu eylemler sadece GERÇEK/commit
+  edilmiş veri üzerinde çalışabildiğinden).
+- **UI:** `/ai-dev` sayfasına "🧠 Gelişmiş" örnek-komut grubu eklendi
+  (mor rozetli, axet gerektiğini açıkça belirten ayrı bir bölüm —
+  mevcut yapılandırılmış-komut örneklerinden görsel olarak ayrışıyor).
+- 15 yeni test (yeni VERSION+TIME boyutlu model+rapor fixture'ı ile:
+  her 4 eylem için model/dims/izin/axet-yok hata yolları + `update_
+  report_add_comparison`'ın gerçekten `filters`'ı genişlettiği +
+  `create_comment`'ın rapor/hücre seviyesinde gerçekten yazdığı) —
+  toplam **380 test**. Lint 0 hata (1 önceden var olan ilişkisiz
+  uyarı), typecheck temiz, `next build` başarılı.
+- `docs/ROADMAP.md`'deki "AI ile Geliştirme" bölümüne bu genişletme
+  "Genişletme" alt-maddesi olarak eklendi (kapsam/tasarım kararları +
+  kasıtlı olarak kapsam dışı bırakılanlarla).
+- **Henüz commit edilmedi** — sıradaki adım commit+push.

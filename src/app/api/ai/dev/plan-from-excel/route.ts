@@ -39,6 +39,6 @@ export async function POST(req: Request) {
   }
 
   const ctx: PlanContext = { tenantId: session.tenantId, userId: session.id, role: session.role };
-  const results = runPlan(result.plan, ctx, true);
+  const results = await runPlan(result.plan, ctx, true);
   return NextResponse.json({ plan: result.plan, results, source: "excel" });
 }
