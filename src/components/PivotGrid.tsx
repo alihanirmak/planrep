@@ -8,6 +8,7 @@ import {
   styleFor,
   type CalcColumn,
   type CondRule,
+  type JoinDef,
 } from "@/lib/report-types";
 import { computeVirtualRange } from "@/lib/virtualize";
 
@@ -43,6 +44,8 @@ export default function PivotGrid({
   rowHeader,
   calcRows,
   calcColumns,
+  joinColumns,
+  joinValues,
   condRules,
   subtotals,
   transform,
@@ -58,6 +61,8 @@ export default function PivotGrid({
   rowHeader: string;
   calcRows: PivotViewRow[];
   calcColumns: CalcColumn[];
+  joinColumns?: JoinDef[];
+  joinValues?: Record<string, Record<string, number>>;
   condRules: CondRule[];
   subtotals: boolean;
   transform: Transform;
@@ -70,6 +75,7 @@ export default function PivotGrid({
   commentCells?: Set<string>;
 }) {
   const twoLevel = view.columns.some((c) => c.labels.length > 1);
+  const joinCols = joinColumns ?? [];
   const sortIcon = (key: string) =>
     sortKey === key ? (sortDir === "desc" ? " ↓" : " ↑") : "";
 
@@ -198,6 +204,17 @@ export default function PivotGrid({
             </td>
           );
         })}
+        {joinCols.map((jc) => {
+          const v = row.path[0] != null ? joinValues?.[jc.id]?.[row.path[0]] : undefined;
+          return (
+            <td
+              key={jc.id}
+              className="whitespace-nowrap bg-emerald-50/40 px-3 py-1.5 text-right tabular-nums"
+            >
+              {v != null ? format(v) : "—"}
+            </td>
+          );
+        })}
       </tr>
     );
   }
@@ -210,7 +227,7 @@ export default function PivotGrid({
   // Sabit kolon sayisi: satir basligi + veri kolonlari + Genel Toplam
   // kolonu + hesaplanan (calc) kolonlar. Spacer <tr>'lerin colSpan'inda
   // kullanilir.
-  const totalColumnCount = 1 + view.columns.length + 1 + calcColumns.length;
+  const totalColumnCount = 1 + view.columns.length + 1 + calcColumns.length + joinCols.length;
 
   // Sanallastirma aktifken konteyner dikey olarak da kirpilir (sabit
   // yukseklik + overflow-auto) ve basligi/alt toplami her zaman gorunur
@@ -254,6 +271,9 @@ export default function PivotGrid({
               {calcColumns.map((cc) => (
                 <th key={cc.id} className={headerStickyClass}></th>
               ))}
+              {joinCols.map((jc) => (
+                <th key={jc.id} className={headerStickyClass}></th>
+              ))}
             </tr>
           )}
           <tr>
@@ -282,6 +302,14 @@ export default function PivotGrid({
                 className={`${headerStickyClass} bg-blue-50 px-3 py-2 text-right text-blue-700`}
               >
                 ƒ {cc.name}
+              </th>
+            ))}
+            {joinCols.map((jc) => (
+              <th
+                key={jc.id}
+                className={`${headerStickyClass} bg-emerald-50 px-3 py-2 text-right text-emerald-700`}
+              >
+                🔗 {jc.name}
               </th>
             ))}
           </tr>
@@ -323,6 +351,25 @@ export default function PivotGrid({
                 {totalCalc[cc.id] != null ? format(totalCalc[cc.id]!) : "—"}
               </td>
             ))}
+            {joinCols.map((jc) => {
+              // SADECE kok (depth 0) satirlarin degerleri toplanir — joinValues
+              // haritasi primaryDim'in HER derinligindeki uye icin kendi alt
+              // agac toplamini tutar, tum degerleri toplamak cift-sayima yol
+              // acardi (bkz. lib/cross-model-join.ts).
+              const rootRows = view.rows.filter((r) => r.depth === 0);
+              const sum =
+                rootRows.length > 0
+                  ? rootRows.reduce((acc, r) => acc + (joinValues?.[jc.id]?.[r.path[0]] ?? 0), 0)
+                  : null;
+              return (
+                <td
+                  key={jc.id}
+                  className={`${footerStickyClass} whitespace-nowrap bg-emerald-100/50 px-3 py-2 text-right tabular-nums`}
+                >
+                  {sum != null ? format(sum) : "—"}
+                </td>
+              );
+            })}
           </tr>
         </tfoot>
       </table>

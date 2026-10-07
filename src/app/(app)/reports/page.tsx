@@ -17,6 +17,7 @@ import {
   type CalcRow,
   type CondRule,
   type ExportPayload,
+  type JoinDef,
   type ReportDefV2,
   type ReportOptions,
 } from "@/lib/report-types";
@@ -272,6 +273,18 @@ export default function ReportsPage() {
   const [formulaError, setFormulaError] = useState<string | null>(null);
   const [ruleDraft, setRuleDraft] = useState<CondRule>({ target: "*", op: "<", value: 0, style: "red-text" });
 
+  const [joins, setJoins] = useState<JoinDef[]>([]);
+  const [joinValues, setJoinValues] = useState<Record<string, Record<string, number>>>({});
+  const [joinDraft, setJoinDraft] = useState<{
+    name: string;
+    modelId: number | null;
+    via: JoinDef["via"];
+    attributeCode: string;
+    targetDim: string;
+    measureCode: string;
+  }>({ name: "", modelId: null, via: "dimension", attributeCode: "", targetDim: "", measureCode: "" });
+  const [joinAttributes, setJoinAttributes] = useState<Array<{ code: string; name: string }>>([]);
+
   const model = useMemo(() => models.find((m) => m.id === modelId) ?? null, [models, modelId]);
   const unusedZone = useMemo(
     () =>
@@ -280,6 +293,15 @@ export default function ReportsPage() {
         : [],
     [model, rowsZone, colsZone]
   );
+  const joinModel = useMemo(() => models.find((m) => m.id === joinDraft.modelId) ?? null, [models, joinDraft.modelId]);
+  const primaryJoinDim = useMemo(() => model?.dims.find((d) => d.code === rowsZone[0]) ?? null, [model, rowsZone]);
+
+  useEffect(() => {
+    if (joinDraft.via !== "attribute" || !primaryJoinDim) return;
+    fetch(`/api/dimensions/${primaryJoinDim.id}/attributes`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((list: Array<{ code: string; name: string }>) => setJoinAttributes(list));
+  }, [joinDraft.via, primaryJoinDim]);
 
   function loadSavedList() {
     fetch("/api/reports").then((r) => r.json()).then(setSaved);
@@ -306,7 +328,7 @@ export default function ReportsPage() {
             if (m) {
               applyDef(def, "AI Raporu");
               setMode("view");
-              runWith(m, def.rows, def.cols, def.filters, def.measureCode);
+              runWith(m, def.rows, def.cols, def.filters, def.measureCode, def.joins);
               return;
             }
           } catch {
@@ -327,6 +349,8 @@ export default function ReportsPage() {
     setColsZone([time && time !== lastDim ? time.code : m.dims[0].code]);
     setFilters({});
     setMeasureCode("");
+    setJoins([]);
+    setJoinValues({});
     setEngine(null);
   }
 
@@ -336,6 +360,8 @@ export default function ReportsPage() {
     setColsZone(def.cols);
     setFilters(def.filters);
     setMeasureCode(def.measureCode ?? "");
+    setJoins(def.joins ?? []);
+    setJoinValues({});
     setCalcColumns(def.calcColumns);
     setCalcRows(def.calcRows);
     setCondRules(def.condRules);
@@ -380,21 +406,30 @@ export default function ReportsPage() {
     rows: string[],
     cols: string[],
     f: Record<string, string[]>,
-    mc?: string
+    mc?: string,
+    j?: JoinDef[]
   ) {
     setBusy(true);
     setMsg(null);
     const res = await fetch("/api/pivot", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ modelId: m.id, rows, cols, filters: f, measureCode: mc || undefined }),
+      body: JSON.stringify({
+        modelId: m.id,
+        rows,
+        cols,
+        filters: f,
+        measureCode: mc || undefined,
+        joins: j && j.length > 0 ? j : undefined,
+      }),
     });
     setBusy(false);
     if (!res.ok) {
       setMsg("Sorgu başarısız");
       return;
     }
-    const { tuples } = await res.json();
+    const { tuples, joinValues: jv } = await res.json();
+    setJoinValues(jv ?? {});
     const rowDims = rows.map((c) => m.dims.find((d) => d.code === c)!);
     const colDims = cols.map((c) => m.dims.find((d) => d.code === c)!);
     const eng = createPivotEngine(rowDims, colDims, tuples);
@@ -408,7 +443,7 @@ export default function ReportsPage() {
       setMsg("En az bir satır ve bir sütun boyutu gerekli");
       return;
     }
-    await runWith(model, rowsZone, colsZone, filters, measureCode);
+    await runWith(model, rowsZone, colsZone, filters, measureCode, joins);
   }
 
   const view = useMemo(
@@ -537,6 +572,7 @@ export default function ReportsPage() {
       cols: colsZone,
       filters,
       measureCode: measureCode || undefined,
+      joins: joins.length > 0 ? joins : undefined,
       calcColumns,
       calcRows,
       condRules,
@@ -572,7 +608,7 @@ export default function ReportsPage() {
     loadComments(r.id);
     setMode("view");
     const m = models.find((x) => x.id === def.modelId);
-    if (m) runWith(m, def.rows, def.cols, def.filters, def.measureCode);
+    if (m) runWith(m, def.rows, def.cols, def.filters, def.measureCode, def.joins);
   }
 
   async function save(force = false) {
@@ -973,6 +1009,8 @@ export default function ReportsPage() {
                 rowHeader={engineDims.rows.map((d) => d.name).join(" / ")}
                 calcRows={calcRowsComputed}
                 calcColumns={calcColumns}
+                joinColumns={joins}
+                joinValues={joinValues}
                 condRules={condRules}
                 subtotals={options.subtotals}
                 transform={transform}
@@ -1277,6 +1315,121 @@ export default function ReportsPage() {
               >
                 {t("common.add")}
               </button>
+            </Section>
+
+            <Section title="🔗 Çoklu-Model Join" badge={joins.length}>
+              {joins.map((j) => (
+                <div key={j.id} className="mb-1 flex items-center gap-2 rounded-lg bg-emerald-50 px-2 py-1 text-xs">
+                  <span className="font-medium text-slate-700">{j.name}</span>
+                  <span className="truncate text-[10px] text-slate-400">
+                    {models.find((m) => m.id === j.modelId)?.name ?? j.modelId} / {j.targetDim}
+                  </span>
+                  <button
+                    onClick={() => setJoins(joins.filter((x) => x.id !== j.id))}
+                    className="ml-auto text-red-400 hover:text-red-600"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+              <input
+                value={joinDraft.name}
+                onChange={(e) => setJoinDraft({ ...joinDraft, name: e.target.value })}
+                placeholder="Sütun adı (Bölge Bütçesi)"
+                className={inputCls}
+              />
+              <select
+                value={joinDraft.modelId ?? ""}
+                onChange={(e) =>
+                  setJoinDraft({ ...joinDraft, modelId: Number(e.target.value), targetDim: "", measureCode: "" })
+                }
+                className={inputCls}
+              >
+                <option value="">İkinci model seçin</option>
+                {models.filter((m) => m.id !== modelId).map((m) => (
+                  <option key={m.id} value={m.id}>
+                    🧊 {m.name}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={joinDraft.via}
+                onChange={(e) => setJoinDraft({ ...joinDraft, via: e.target.value as JoinDef["via"], attributeCode: "" })}
+                className={inputCls}
+              >
+                <option value="dimension">Eşleştirme: paylaşılan boyut kodu</option>
+                <option value="attribute">Eşleştirme: boyut üyesi özelliği</option>
+              </select>
+              {joinDraft.via === "attribute" && (
+                <select
+                  value={joinDraft.attributeCode}
+                  onChange={(e) => setJoinDraft({ ...joinDraft, attributeCode: e.target.value })}
+                  className={inputCls}
+                >
+                  <option value="">
+                    {rowsZone[0] ? `(${rowsZone[0]} özelliği seçin)` : "önce bir satır boyutu seçin"}
+                  </option>
+                  {joinAttributes.map((a) => (
+                    <option key={a.code} value={a.code}>
+                      {a.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {joinModel && (
+                <select
+                  value={joinDraft.targetDim}
+                  onChange={(e) => setJoinDraft({ ...joinDraft, targetDim: e.target.value })}
+                  className={inputCls}
+                >
+                  <option value="">Hedef boyut seçin</option>
+                  {joinModel.dims.map((d) => (
+                    <option key={d.code} value={d.code}>
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {joinModel && joinModel.measures && joinModel.measures.length > 0 && (
+                <select
+                  value={joinDraft.measureCode}
+                  onChange={(e) => setJoinDraft({ ...joinDraft, measureCode: e.target.value })}
+                  className={inputCls}
+                >
+                  <option value="">Ölçü: {joinModel.measures.find((m) => m.slot === 1)?.name ?? "Değer"} (varsayılan)</option>
+                  {joinModel.measures.map((m) => (
+                    <option key={m.code} value={m.code}>
+                      Ölçü: {m.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <button
+                onClick={() => {
+                  if (!joinDraft.name.trim() || !joinDraft.modelId || !joinDraft.targetDim) return;
+                  if (joinDraft.via === "attribute" && !joinDraft.attributeCode) return;
+                  setJoins([
+                    ...joins,
+                    {
+                      id: `j${Date.now().toString(36)}`,
+                      name: joinDraft.name.trim(),
+                      modelId: joinDraft.modelId,
+                      via: joinDraft.via,
+                      attributeCode: joinDraft.via === "attribute" ? joinDraft.attributeCode : undefined,
+                      targetDim: joinDraft.targetDim,
+                      measureCode: joinDraft.measureCode || undefined,
+                    },
+                  ]);
+                  setJoinDraft({ name: "", modelId: null, via: "dimension", attributeCode: "", targetDim: "", measureCode: "" });
+                }}
+                className="mt-2 w-full rounded-lg bg-blue-600 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
+              >
+                {t("common.add")}
+              </button>
+              <div className="mt-1.5 text-[10px] text-slate-400">
+                İkinci modelin verisi, bu raporun ilk satır boyutu (
+                {rowsZone[0] ?? "—"}) üzerinden eşlenip ekstra bir sütun olarak gösterilir.
+              </div>
             </Section>
           </div>
         )}

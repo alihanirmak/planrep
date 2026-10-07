@@ -9,6 +9,17 @@ import { formatT } from "@/lib/i18n";
 import { getServerT } from "@/lib/i18n-server";
 import { cached, hashCacheParams } from "@/lib/cache";
 import { listEffectiveMeasures, valueColumnForSlot } from "@/lib/model-measures";
+import { computeJoinValues } from "@/lib/cross-model-join";
+
+const joinDefSchema = z.object({
+  id: z.string().min(1).max(40),
+  name: z.string().min(1).max(80),
+  modelId: z.number().int(),
+  measureCode: z.string().max(40).optional(),
+  via: z.enum(["dimension", "attribute"]),
+  attributeCode: z.string().max(40).optional(),
+  targetDim: z.string().min(1),
+});
 
 const bodySchema = z.object({
   modelId: z.number().int(),
@@ -18,6 +29,7 @@ const bodySchema = z.object({
   page: z.number().int().min(0).optional(),
   pageSize: z.number().int().min(1).max(1000).optional(),
   measureCode: z.string().max(40).optional(),
+  joins: z.array(joinDefSchema).max(3).optional(),
 });
 
 // Pivot sonuclari (facts tablosu uzerinde agir GROUP BY/SUM) kisa sureli
@@ -36,8 +48,14 @@ export async function POST(req: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
   }
-  const { modelId, rows, cols, filters, page, pageSize, measureCode } = parsed.data;
+  const { modelId, rows, cols, filters, page, pageSize, measureCode, joins } = parsed.data;
   if (getModelTenantId(modelId) !== session.tenantId) {
+    return NextResponse.json({ error: "model_not_found" }, { status: 404 });
+  }
+  // Guvenlik: join hedefi baska bir tenant'a ait bir model OLAMAZ — aksi
+  // halde bir kullanici, baska bir tenant'in verisini "join" uzerinden
+  // sizdirabilirdi (bkz. getModelTenantId'nin 404 donme kurali, 403 degil).
+  if (joins?.some((j) => getModelTenantId(j.modelId) !== session.tenantId)) {
     return NextResponse.json({ error: "model_not_found" }, { status: 404 });
   }
 
@@ -50,9 +68,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "invalid_dims" }, { status: 400 });
   }
 
-  const cacheKey = `pivot:v1:${modelId}:${session.id}:${hashCacheParams({ rows, cols, filters, page, pageSize, measureCode })}`;
+  const cacheKey = `pivot:v1:${modelId}:${session.id}:${hashCacheParams({ rows, cols, filters, page, pageSize, measureCode, joins })}`;
   const body = await cached(cacheKey, PIVOT_CACHE_TTL_SECONDS, () =>
-    computePivot(session.id, modelId, rows, cols, filters, page, pageSize, measureCode)
+    computePivot(session.id, modelId, rows, cols, filters, page, pageSize, measureCode, joins)
   );
   if ("error" in body) {
     if (body.error === "result_too_large") {
@@ -71,6 +89,7 @@ type PivotComputeResult =
   | {
       tuples: Array<{ r: string[]; c: string[]; v: number }>;
       pagination?: { page: number; pageSize: number; totalRoots: number };
+      joinValues?: Record<string, Record<string, number>>;
     }
   | { error: "result_too_large"; count: number };
 
@@ -82,7 +101,8 @@ function computePivot(
   filters: Record<string, string[]>,
   page: number | undefined,
   pageSize: number | undefined,
-  measureCode?: string
+  measureCode?: string,
+  joins?: Array<z.infer<typeof joinDefSchema>>
 ): PivotComputeResult {
   const dims = getModelDims(modelId);
   const rowD = rows.map((c) => dims.find((d) => d.code === c));
@@ -149,8 +169,22 @@ function computePivot(
     v: Number(row.v),
   }));
 
+  // Coklu-model join: SADECE rows[0] uzerinden hesaplanir (bkz.
+  // lib/cross-model-join.ts) — pivot.ts'teki PivotViewRow.path[0] her
+  // zaman rows[0] boyutunun kendi uye kodu oldugundan, bu tek bir
+  // Record<rows[0] kodu, deger> ile UI'daki her derinlikteki satiri
+  // dogru besler.
+  let joinValues: Record<string, Record<string, number>> | undefined;
+  if (joins && joins.length > 0) {
+    joinValues = {};
+    for (const j of joins) {
+      joinValues[j.id] = computeJoinValues(modelId, rows[0], j, userId);
+    }
+  }
+
   return {
     tuples,
     ...(pagination ? { pagination: { page: page!, pageSize: pageSize!, totalRoots: allRoots.length } } : {}),
+    ...(joinValues ? { joinValues } : {}),
   };
 }

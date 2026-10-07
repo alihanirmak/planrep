@@ -532,3 +532,81 @@ Tamamlanan Faz 3 maddeleri (hepsi ayrı commit):
   TAMAMLANDI" olarak güncellendi — "sınırsız/çoklu değer (measure) kolonu"
   maddesi artık tamamen bitti sayılır.
 - **Henüz commit edilmedi** — sıradaki adım commit+push.
+
+## 2026-10-07 — Çoklu-model join + üstüne rapor (cross-model reporting) TAMAMLANDI
+
+- Kullanıcı "sırada ne var" diye sorunca backlog'daki "çoklu-model join"
+  maddesi önerildi (ön koşulu olan "boyut üyesi özellikleri" zaten
+  tamamlanmıştı) ve 3 netleştirme sorusuyla (`ask_user`) kapsam
+  belirlendi: (1) görselleştirme = yan yana kolonlar (tek birleşik pivot
+  DEĞİL), (2) eşleştirme = hem paylaşılan boyut kodu HEM attribute
+  referansı (ikisi de desteklensin), (3) formül motorünün ikinci modelin
+  hücrelerine referans vermesi bu round'da kapsam dışı (sadece
+  görüntüleme).
+- **Mimari karar — fiziksel SQL JOIN YOK:** fact tabloları arasında FK
+  yok, `d1..d16` anlamı modelden modele değişir — bu nedenle eşleştirme
+  uygulama katmanında (`lib/cross-model-join.ts`, yeni dosya) iki ayrı
+  aggregate sonucunun birleştirilmesiyle yapılıyor.
+- **`computeJoinValues(primaryModelId, primaryDimCode, join, userId?)`:**
+  Önemli bir keşif `pivot.ts` okunurken yapıldı — `PivotViewRow.path[0]`
+  HER derinlikteki satır için (sadece kök değil) o satırın KENDİ üye
+  kodudur (pivot motoru aynı boyutun hiyerarşi çocuklarını `path =
+  [...path.slice(0,dimIndex), ch.code]` ile tek elemanlı tutuyor, rollup
+  "desc" setleriyle ayrıca hesaplanıyor). Bu nedenle join değerlerinin
+  SADECE kök üyeler için hesaplanması YANLIŞ olurdu — rows[0] boyutunun
+  HER üyesi (ara düğümler dahil) için kendi alt ağacındaki
+  (`withDescendants`) üyelerin ikincil modeldeki karşılığı bulunup
+  (via="dimension": aynı kod; via="attribute":
+  `getAttributeValuesForMembers` ile okunan özellik değeri) TEK bir
+  aggregate sorgusuyla ikincil modelin toplamları çekiliyor, sonra her
+  birincil üyenin kendi karşılık kodları toplanıyor. `lib/query.ts`/
+  `api/pivot/route.ts`'teki `listEffectiveMeasures`/`valueColumnForSlot`
+  deseni AYNEN kullanıldı (ikincil modelin ölçüsü de çoklu-ölçü
+  farkındalıklı).
+- **Tipler:** `report-types.ts`'e `JoinDef` (`id,name,modelId,
+  measureCode?,via,attributeCode?,targetDim`) + `ReportDefV2.joins?:
+  JoinDef[]` (opsiyonel — eski kayıtlı raporlar değişmeden çalışır).
+- **`/api/pivot` genişletmesi:** body şemasına `joins` (zod, en fazla 3)
+  eklendi. **Güvenlik (kritik):** her join'in `modelId`'si çağıranın
+  tenant'ına ait olmalı — kontrol edilmezse bir kullanıcı başka bir
+  tenant'ın verisini join sütunu üzerinden görebilirdi (`getModelTenantId`
+  ile AYNI "404 döndür, 403 değil" deseni). Yanıta opsiyonel `joinValues:
+  Record<joinId, Record<rows[0] kodu, number>>` eklendi; cache key'e
+  `joins` dahil edildi (`hashCacheParams`).
+- **`PivotGrid.tsx` genişletmesi:** yeni `joinColumns`/`joinValues`
+  prop'ları — calc column'larla BİREBİR AYNI "sütun ekleme" render
+  deseni (header/body/footer'a sırayla ekleniyor, `totalColumnCount`
+  güncellendi) ama değerler formülle değil hazır bir haritadan okunuyor
+  (yeşil `🔗` başlıklı sütunlar, calc column'ların mavi `ƒ`'siyle görsel
+  olarak ayrışıyor). **Önemli düzeltme (ilk taslakta hata vardı):** alt
+  toplam satırı ilk denemede TÜM `joinValues[jc.id]` girdilerini
+  topluyordu — bu çift sayıma yol açardı çünkü harita her derinlikteki
+  üye için KENDİ rollup toplamını tutuyor (bir üst düğüm + çocukları
+  birlikte toplanınca değer katlanırdı); düzeltme: sadece `depth===0`
+  (kök) satırların değerleri toplanıyor.
+- **UI (`reports/page.tsx`):** "🔗 Çoklu-Model Join" paneli (model/
+  eşleştirme türü/attribute veya hedef boyut/ölçü seçimi ile join
+  ekleme-silme) — `calcColumns` panelinin AYNI tasarım deseniyle. Attribute
+  seçimi için `/api/dimensions/[id]/attributes` o anki birincil
+  rows[0] boyutu değiştiğinde (veya via="attribute" seçildiğinde) ayrıca
+  çekiliyor. `applyModelDefaults`/`applyDef`/`currentDef`/`runWith`'in
+  TÜMÜNE `joins` dahil edildi (kayıt/yükleme/AI-rapor/deep-link
+  akışlarının hepsi). `ReportView.tsx` (salt-okunur widget render'ı) aynı
+  mekanizmayı okuyor.
+- **React Compiler lint notu:** ilk taslakta attribute listesini
+  temizlemek için effect içinde `else` dalında senkron `setJoinAttributes([])`
+  çağrısı vardı — "effect içinde senkron setState" kuralı tarafından
+  reddedildi (bkz. CommandPalette/undo-redo'daki benzer önceki kararlar).
+  Düzeltme: early-return dalında HİÇ setState çağrılmıyor (sadece fetch
+  başarılı olduğunda state güncellenir) — küçük bir UX ödünleşimi (model
+  değişince eski liste bir an görünebilir) ama kurala uyumlu ve basit.
+- 6 yeni test: `cross-model-join.test.ts` — via=attribute yaprak değerleri
+  + ara (CC_ALL) düğümün rollup'ı, measureCode seçimiyle `value2`
+  kolonunun kullanılması, via=dimension doğrudan kod eşlemesi, geçersiz
+  `targetDim`/`primaryDimCode` için boş sonuç — toplam **347 test**.
+  `tsc --noEmit` temiz, `eslint` 0 hata (1 önceden var olan ilişkisiz
+  uyarı), `next build` başarılı. Gerçek dev DB'de şema bütünlüğü
+  (`model_measures`, `business_rules.measure_code`) doğrulandı.
+- `docs/ROADMAP.md`'deki "çoklu-model join" backlog maddesi TAMAMLANDI
+  olarak güncellendi (kapsam/mimari karar + API/UI özeti ile).
+- **Henüz commit edilmedi** — sıradaki adım commit+push.

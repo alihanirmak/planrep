@@ -14,6 +14,27 @@ export type CondRule = {
 
 export type ValueMode = "abs" | "pctRow" | "pctCol";
 
+// Coklu-model join: rapordaki birincil modelin ilk satir boyutu (rows[0])
+// uzerinden, BASKA bir modelin verisini ek bir "lookup" kolonu olarak
+// gosterir. Fiziksel SQL JOIN YAPILMAZ (fact tablolari arasinda FK yok,
+// d1..d16 anlami modelden modele degisir) — eslesme uygulama katmaninda
+// (lib/cross-model-join.ts) iki ayri aggregate sonucu birlestirerek yapilir.
+// via="dimension": ikincil modelin targetDim'indeki UYE KODLARI, birincil
+// modelin rows[0] boyutunun uye kodlariyla AYNI kabul edilir (paylasilan
+// kod seti, orn. TIME/VERSION).
+// via="attribute": birincil modelin rows[0] boyutundaki uyenin attributeCode
+// kodlu ozelligi (bkz. lib/dimension-attributes.ts) okunur, bu DEGER
+// ikincil modelin targetDim'indeki uye koduyla eslestirilir.
+export type JoinDef = {
+  id: string;
+  name: string;
+  modelId: number;
+  measureCode?: string;
+  via: "dimension" | "attribute";
+  attributeCode?: string;
+  targetDim: string;
+};
+
 export type ReportOptions = {
   hideZero: boolean;
   subtotals: boolean;
@@ -50,6 +71,9 @@ export type ReportDefV2 = {
   calcRows: CalcRow[];
   condRules: CondRule[];
   options: ReportOptions;
+  // Opsiyonel coklu-model join sutunlari (bkz. JoinDef yorumu). Eski
+  // (bu alan olmadan kaydedilmis) raporlar bu nedenle degismeden calisir.
+  joins?: JoinDef[];
 };
 
 // v1 (eski kayitli raporlar icin gecis)

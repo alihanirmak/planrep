@@ -25,6 +25,7 @@ export default function ReportView({
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [sort, setSort] = useState<{ key: string; dir: "asc" | "desc" } | null>(null);
   const [error, setError] = useState(false);
+  const [joinValues, setJoinValues] = useState<Record<string, Record<string, number>>>({});
 
   const extraKey = JSON.stringify(extraFilters ?? {});
   const aliveRef = useRef(true);
@@ -49,10 +50,17 @@ export default function ReportView({
         const pRes = await fetch("/api/pivot", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ modelId: d.modelId, rows: d.rows, cols: d.cols, filters, measureCode: d.measureCode }),
+          body: JSON.stringify({
+            modelId: d.modelId,
+            rows: d.rows,
+            cols: d.cols,
+            filters,
+            measureCode: d.measureCode,
+            joins: d.joins,
+          }),
         });
         if (!pRes.ok) throw new Error();
-        const { tuples } = await pRes.json();
+        const { tuples, joinValues: jv } = await pRes.json();
 
         const rowDims = d.rows.map((c) => model.dims.find((x) => x.code === c)!);
         const colDims = d.cols.map((c) => model.dims.find((x) => x.code === c)!);
@@ -61,6 +69,7 @@ export default function ReportView({
         setDef(d);
         setDims({ rows: rowDims, cols: colDims });
         setEngine(eng);
+        setJoinValues(jv ?? {});
         setExpanded(eng.defaultExpanded());
         setSort(d.options.sort);
       })
@@ -152,6 +161,8 @@ export default function ReportView({
         rowHeader={dims.rows.map((d) => d.name).join(" / ")}
         calcRows={calcRowsComputed}
         calcColumns={def.calcColumns}
+        joinColumns={def.joins}
+        joinValues={joinValues}
         condRules={def.condRules}
         subtotals={def.options.subtotals}
         transform={transform}
