@@ -116,7 +116,10 @@ export async function DELETE(
       { status: 400 }
     );
   }
-  const info = sqlite.prepare("DELETE FROM dimension_members WHERE id = ?").run(id);
+  const info = sqlite.transaction(() => {
+    sqlite.prepare("DELETE FROM dimension_member_attribute_values WHERE member_id = ?").run(id);
+    return sqlite.prepare("DELETE FROM dimension_members WHERE id = ?").run(id);
+  })();
   if (info.changes === 0) return NextResponse.json({ error: "not_found" }, { status: 404 });
   logAudit(session.id, "member.delete", "member", id);
   return NextResponse.json({ ok: true });

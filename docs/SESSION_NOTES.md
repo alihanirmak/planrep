@@ -350,3 +350,56 @@ Tamamlanan Faz 3 maddeleri (hepsi ayrı commit):
     EAV dönüşümü) ama ayrı maddeler olarak eklendi, measure maddesi boyut
     maddesiyle birlikte ele alınması gerektiği notuyla.
   - **Henüz commit edilmedi** — sıradaki adım commit+push.
+
+## 2026-10-07 — Boyut üyesi özellikleri (dimension member attributes) TAMAMLANDI
+
+- Kullanıcı "şimdi ilk öncelik boyutlara attribute ekleyelim" dedi — önceki
+  oturumda backlog'a eklenen "boyut üyesi özellikleri" maddesi (çoklu-model
+  join'in ön koşulu) bu oturumda tam uygulandı.
+- **Veri modeli:** `dimension_attributes` (tanım: code/name/type:
+  text|number|date|member_ref/ref_dimension_id — SADECE member_ref için;
+  oluşturulduktan sonra type/refDimensionId route seviyesinde değiştirilemez,
+  tip değişimi var olan değerleri yanlış yorumlatırdı) + yeni bir EAV tablosu
+  `dimension_member_attribute_values` (member_id, attribute_id, value TEXT) —
+  facts tablosundaki d1..d16 sabit kolon kısıtına TABİ DEĞİL, bir boyuta
+  eklenebilecek attribute sayısı sınırsız. `lib/db/schema.ts` + `lib/db/index.ts`
+  (DDL, migration gerekmedi — yeni tablolar `CREATE TABLE IF NOT EXISTS`).
+- **`lib/dimension-attributes.ts`:** CRUD + `getAttributeValuesForMembers`
+  (N+1 önleyen toplu okuma, `lib/model.ts` `fetchMembersByDimension` ile ayn
+  desen) + `getRefMemberOptions` (member_ref dropdown'ları için referans
+  boyutun TÜM üyelerini tek sorguda çeker) + `validateAttributeValue` (number:
+  `Number.isFinite`, date: `YYYY-MM-DD` regex, member_ref: referans boyutta
+  kodun var olup olmadığı kontrolü).
+- **API:** `/api/dimensions/[id]/attributes` (GET liste/POST oluştur — kod
+  tekilliği + member_ref için refDimensionId zorunluluğu/varlık kontrolü),
+  `/api/dimensions/[id]/attributes/[attrId]` (PATCH sadece name/orderIdx —
+  type/refDimensionId KASITLI DEĞİŞTİRİLEMEZ/DELETE kaskad değer temizliği),
+  `/api/members/[id]/attributes` (PATCH — birden fazla değeri topluca, ÖNCE
+  TÜMÜNÜ doğrulayıp SONRA yazarak kısmi yazmayı önler). `/api/dimensions/[id]`
+  GET'i artık `attributes` + her üyenin `attributes` map'i + `refOptions`'ı
+  (member_ref dropdown'ları) tek seferde (N+1'siz) döndürüyor.
+- **Silme güvenliği:** bir boyut başka bir boyutun member_ref attribute'u
+  tarafından referans gösteriliyorsa silinemez (yeni `ref_in_use` kontrolü +
+  i18n mesajı, `err.dimensionRefInUse`); bir üye silindiğinde kendi attribute
+  değerleri de kaskad silinir (`/api/members/[id]` DELETE'e eklendi).
+- **UI (`modeling/dimensions/[id]/page.tsx`):** sağ panele "Özellikler
+  (Attributes)" kartı (tanım CRUD, member_ref için referans boyut seçici —
+  `/api/dimensions`'tan tüm boyutlar çekilir) + üye tablosuna attribute
+  başına dinamik kolon (text/number/date → input, member_ref → dropdown;
+  salt-okunur modda member_ref değeri isme çözümlenerek gösterilir).
+  Rapor/pivot motoruna entegrasyon (gruplama/filtreleme) KASITLI OLARAK
+  kapsam dışı bırakıldı — "önce özellikler, sonra model join" sırasına uygun,
+  entegrasyon çoklu-model join maddesiyle birlikte ele alınacak.
+- 14 yeni test (`dimension-attributes.test.ts`) — toplam **314 test**.
+  Gerçek `next dev` sunucusuna (zaten çalışan dev server, port 3000) karşı
+  tam uçtan uca manuel doğrulama: text+member_ref attribute oluştur →
+  geçersiz referans kodu 400 ile reddedildi → geçerli değer yazıldı → GET'te
+  doğru göründü → null ile temizlendi → referans gösterilen boyutu silme
+  denemesi `ref_in_use` ile reddedildi → attribute silindikten sonra boyut
+  silinebildi; `/modeling/dimensions/[id]` sayfası 200 render etti; test
+  verisi dev DB'den tamamen temizlendiği doğrulandı. Lint/typecheck/build
+  hepsi temiz.
+- `docs/ROADMAP.md`'deki "boyut üyesi özellikleri" maddesi TAMAMLANDI olarak
+  güncellendi, "çoklu-model join" maddesine "ön koşul artık hazır" notu
+  eklendi.
+- **Henüz commit edilmedi** — sıradaki adım commit+push.

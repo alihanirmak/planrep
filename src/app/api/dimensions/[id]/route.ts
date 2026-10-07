@@ -5,6 +5,11 @@ import { getSession } from "@/lib/auth";
 import { sqlite } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
 import { getServerT } from "@/lib/i18n-server";
+import {
+  listDimensionAttributesWithMeta,
+  getAttributeValuesForMembers,
+  getRefMemberOptions,
+} from "@/lib/dimension-attributes";
 
 export async function GET(
   _req: Request,
@@ -30,7 +35,7 @@ export async function GET(
       `SELECT id, code, name, parent_id AS parentId, order_idx AS orderIdx
        FROM dimension_members WHERE dimension_id = ? ORDER BY order_idx, id`
     )
-    .all(id);
+    .all(id) as Array<{ id: number; code: string; name: string; parentId: number | null; orderIdx: number }>;
   const usedIn = sqlite
     .prepare(
       `SELECT m.id, m.name, m.code, md.slot
@@ -39,7 +44,12 @@ export async function GET(
     )
     .all(id);
 
-  return NextResponse.json({ ...dim, members, usedIn });
+  const attributes = listDimensionAttributesWithMeta(id);
+  const attrValuesByMember = getAttributeValuesForMembers(members.map((m) => m.id));
+  const membersWithAttrs = members.map((m) => ({ ...m, attributes: attrValuesByMember.get(m.id) ?? {} }));
+  const refOptions = getRefMemberOptions(attributes);
+
+  return NextResponse.json({ ...dim, members: membersWithAttrs, attributes, refOptions, usedIn });
 }
 
 const patchSchema = z.object({
@@ -103,7 +113,26 @@ export async function DELETE(
       { status: 400 }
     );
   }
+  // Baska bir boyutun member_ref attribute'u bu boyuta isaret ediyorsa silme
+  // engellenir (silinirse o attribute'un dropdown'u/dogrulamasi kirilirdi).
+  const refUsed = sqlite
+    .prepare("SELECT COUNT(*) AS c FROM dimension_attributes WHERE ref_dimension_id = ?")
+    .get(id) as { c: number };
+  if (refUsed.c > 0) {
+    const { t } = await getServerT();
+    return NextResponse.json(
+      { error: "ref_in_use", message: t("err.dimensionRefInUse") },
+      { status: 400 }
+    );
+  }
   const tx = sqlite.transaction(() => {
+    sqlite
+      .prepare(
+        `DELETE FROM dimension_member_attribute_values WHERE attribute_id IN
+           (SELECT id FROM dimension_attributes WHERE dimension_id = ?)`
+      )
+      .run(id);
+    sqlite.prepare("DELETE FROM dimension_attributes WHERE dimension_id = ?").run(id);
     sqlite.prepare("DELETE FROM dimension_members WHERE dimension_id = ?").run(id);
     sqlite.prepare("DELETE FROM dimensions WHERE id = ?").run(id);
   });

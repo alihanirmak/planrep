@@ -102,6 +102,51 @@ export const dimensionMembers = sqliteTable(
   (t) => [uniqueIndex("uq_member_dim_code").on(t.dimensionId, t.code)]
 );
 
+// Boyut uyesi ozellikleri (dimension member attributes) — hiyerarsi disi ek
+// nitelik tanimlari (orn. "Musteri" boyutundaki uyenin "Bolge"si). type
+// "member_ref" ise deger baska bir boyuttaki (refDimensionId) bir uyenin
+// KODUDUR (raw id DEGIL) — projenin genelindeki "kod birincil disaridan
+// gorunur kimlik" konvansiyonuyla tutarli (bkz. scopeFilters/withDescendants).
+// type/refDimensionId olusturulduktan sonra DEGISTIRILEMEZ (route seviyesinde
+// engellenir) — tip degisimi var olan degerleri yanlis yorumlatirdi, silip
+// yeniden olusturmak gerekir.
+export const dimensionAttributes = sqliteTable(
+  "dimension_attributes",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    dimensionId: integer("dimension_id").notNull(),
+    code: text("code").notNull(),
+    name: text("name").notNull(),
+    type: text("type", { enum: ["text", "number", "date", "member_ref"] }).notNull(),
+    refDimensionId: integer("ref_dimension_id"),
+    orderIdx: integer("order_idx").notNull().default(0),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [
+    uniqueIndex("uq_dim_attr_code").on(t.dimensionId, t.code),
+    index("ix_dim_attr_dimension").on(t.dimensionId),
+  ]
+);
+
+// Her uye x attribute icin tek bir deger satiri (EAV — attribute sayisi
+// sinirsizdir, facts tablosundaki d1..d16 sabit kolon kisitina TABI DEGIL).
+// value her zaman TEXT: number/date tipleri bile string olarak saklanir,
+// dogrulama route seviyesinde (lib/dimension-attributes.ts validateAttributeValue)
+// yapilir.
+export const dimensionMemberAttributeValues = sqliteTable(
+  "dimension_member_attribute_values",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    memberId: integer("member_id").notNull(),
+    attributeId: integer("attribute_id").notNull(),
+    value: text("value"),
+  },
+  (t) => [
+    uniqueIndex("uq_dim_attr_value_member_attr").on(t.memberId, t.attributeId),
+    index("ix_dim_attr_value_attribute").on(t.attributeId),
+  ]
+);
+
 export const models = sqliteTable("models", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   tenantId: integer("tenant_id").notNull().default(1),

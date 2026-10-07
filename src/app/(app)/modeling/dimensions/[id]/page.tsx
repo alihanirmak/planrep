@@ -4,7 +4,23 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 
-type Member = { id: number; code: string; name: string; parentId: number | null; orderIdx: number };
+type AttributeType = "text" | "number" | "date" | "member_ref";
+type Attribute = {
+  id: number;
+  code: string;
+  name: string;
+  type: AttributeType;
+  refDimensionId: number | null;
+  refDimensionName: string | null;
+};
+type Member = {
+  id: number;
+  code: string;
+  name: string;
+  parentId: number | null;
+  orderIdx: number;
+  attributes: Record<string, string | null>;
+};
 type DimDetail = {
   id: number;
   code: string;
@@ -14,10 +30,18 @@ type DimDetail = {
   visibility: "public" | "private";
   ownerModelName: string | null;
   members: Member[];
+  attributes: Attribute[];
+  refOptions: Record<number, Array<{ code: string; name: string }>>;
   usedIn: Array<{ id: number; name: string; code: string; slot: number }>;
 };
 
 const TYPE_LABEL: Record<string, string> = { standard: "Standart", time: "Zaman", version: "Versiyon" };
+const ATTR_TYPE_LABEL: Record<AttributeType, string> = {
+  text: "Metin",
+  number: "Sayı",
+  date: "Tarih",
+  member_ref: "Üye Referansı",
+};
 
 export default function DimensionDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -28,6 +52,13 @@ export default function DimensionDetailPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [draft, setDraft] = useState({ code: "", name: "", parentCode: "" });
   const [meta, setMeta] = useState({ name: "", description: "", visibility: "public" as "public" | "private" });
+  const [allDims, setAllDims] = useState<Array<{ id: number; code: string; name: string }>>([]);
+  const [attrDraft, setAttrDraft] = useState({
+    code: "",
+    name: "",
+    type: "text" as AttributeType,
+    refDimensionId: "",
+  });
 
   const canEdit = role !== "viewer";
 
@@ -43,6 +74,7 @@ export default function DimensionDetailPage() {
   useEffect(() => {
     load();
     fetch("/api/me").then((r) => r.json()).then((me) => setRole(me.role ?? "viewer"));
+    fetch("/api/dimensions").then((r) => (r.ok ? r.json() : [])).then(setAllDims);
   }, [load]);
 
   const byId = useMemo(() => new Map((dim?.members ?? []).map((m) => [m.id, m])), [dim]);
@@ -119,6 +151,33 @@ export default function DimensionDetailPage() {
     await api(`/api/dimensions/${id}`, meta, "PATCH");
   }
 
+  async function addAttribute() {
+    if (!attrDraft.code.trim() || !attrDraft.name.trim()) return;
+    if (attrDraft.type === "member_ref" && !attrDraft.refDimensionId) {
+      setMsg("⚠ Referans boyut seçilmeli");
+      return;
+    }
+    if (
+      await api(`/api/dimensions/${id}/attributes`, {
+        code: attrDraft.code.trim().toUpperCase(),
+        name: attrDraft.name.trim(),
+        type: attrDraft.type,
+        refDimensionId: attrDraft.type === "member_ref" ? Number(attrDraft.refDimensionId) : null,
+      })
+    ) {
+      setAttrDraft({ code: "", name: "", type: "text", refDimensionId: "" });
+    }
+  }
+
+  async function removeAttribute(attrId: number, name: string) {
+    if (!confirm(`"${name}" özelliği ve tüm üye değerleri silinsin mi?`)) return;
+    api(`/api/dimensions/${id}/attributes/${attrId}`, null, "DELETE");
+  }
+
+  function setMemberAttr(memberId: number, code: string, value: string) {
+    api(`/api/members/${memberId}/attributes`, { values: { [code]: value === "" ? null : value } }, "PATCH");
+  }
+
   async function removeDim() {
     if (!dim) return;
     if (!confirm(`"${dim.name}" boyutu ve tüm üyeleri silinsin mi?`)) return;
@@ -170,6 +229,11 @@ export default function DimensionDetailPage() {
                   <th className="px-4 py-2 text-left">Ad</th>
                   <th className="px-4 py-2 text-left">Üst Üye</th>
                   <th className="w-20 px-4 py-2 text-right">Sıra</th>
+                  {dim.attributes.map((a) => (
+                    <th key={a.id} className="px-4 py-2 text-left">
+                      {a.name}
+                    </th>
+                  ))}
                   {canEdit && <th className="w-14 px-4 py-2"></th>}
                 </tr>
               </thead>
@@ -209,6 +273,9 @@ export default function DimensionDetailPage() {
                       </select>
                     </td>
                     <td className="px-4 py-2"></td>
+                    {dim.attributes.map((a) => (
+                      <td key={a.id} className="px-4 py-2"></td>
+                    ))}
                     <td className="px-4 py-2 text-right">
                       <button
                         onClick={addMember}
@@ -285,6 +352,46 @@ export default function DimensionDetailPage() {
                         <span className="text-xs text-slate-400">{m.orderIdx}</span>
                       )}
                     </td>
+                    {dim.attributes.map((a) => {
+                      const raw = m.attributes[a.code] ?? "";
+                      return (
+                        <td key={a.id} className="px-4 py-1.5">
+                          {canEdit ? (
+                            a.type === "member_ref" ? (
+                              <select
+                                value={raw}
+                                onChange={(e) => setMemberAttr(m.id, a.code, e.target.value)}
+                                className="w-full rounded border border-transparent bg-transparent px-1 py-0.5 text-xs text-slate-600 hover:border-slate-200"
+                              >
+                                <option value="">—</option>
+                                {(dim.refOptions[a.refDimensionId ?? -1] ?? []).map((o) => (
+                                  <option key={o.code} value={o.code}>
+                                    {o.name}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              <input
+                                type={a.type === "number" ? "number" : a.type === "date" ? "date" : "text"}
+                                defaultValue={raw}
+                                onBlur={(e) => {
+                                  const v = e.target.value.trim();
+                                  if (v !== raw) setMemberAttr(m.id, a.code, v);
+                                }}
+                                className="w-full rounded border border-transparent bg-transparent px-1 py-0.5 text-xs text-slate-600 hover:border-slate-200 focus:border-blue-400 focus:bg-white focus:outline-none"
+                              />
+                            )
+                          ) : (
+                            <span className="text-xs text-slate-400">
+                              {a.type === "member_ref"
+                                ? (dim.refOptions[a.refDimensionId ?? -1] ?? []).find((o) => o.code === raw)
+                                    ?.name ?? raw ?? "—"
+                                : raw || "—"}
+                            </span>
+                          )}
+                        </td>
+                      );
+                    })}
                     {canEdit && (
                       <td className="px-4 py-1.5 text-right">
                         <button
@@ -353,6 +460,90 @@ export default function DimensionDetailPage() {
                 </button>
               )}
             </div>
+          </div>
+
+          <div className="mt-4 rounded-xl bg-white p-5 shadow-sm">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+              Özellikler (Attributes)
+            </h3>
+            <div className="mt-2 space-y-1.5">
+              {dim.attributes.map((a) => (
+                <div
+                  key={a.id}
+                  className="flex items-center justify-between rounded-lg px-2 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+                >
+                  <div>
+                    <span className="font-medium">{a.name}</span>{" "}
+                    <span className="font-mono text-xs text-slate-400">{a.code}</span>
+                    <div className="text-xs text-slate-400">
+                      {ATTR_TYPE_LABEL[a.type]}
+                      {a.type === "member_ref" && a.refDimensionName ? ` → ${a.refDimensionName}` : ""}
+                    </div>
+                  </div>
+                  {canEdit && (
+                    <button
+                      onClick={() => removeAttribute(a.id, a.name)}
+                      className="text-xs text-red-400 hover:text-red-600"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              ))}
+              {dim.attributes.length === 0 && (
+                <div className="text-xs text-slate-400">Henüz bir özellik tanımlanmadı.</div>
+              )}
+            </div>
+            {canEdit && (
+              <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
+                <input
+                  value={attrDraft.code}
+                  onChange={(e) => setAttrDraft({ ...attrDraft, code: e.target.value })}
+                  placeholder="Kod (örn. REGION)"
+                  className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 font-mono text-xs text-slate-900"
+                />
+                <input
+                  value={attrDraft.name}
+                  onChange={(e) => setAttrDraft({ ...attrDraft, name: e.target.value })}
+                  placeholder="Ad (örn. Bölge)"
+                  className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs text-slate-900"
+                />
+                <select
+                  value={attrDraft.type}
+                  onChange={(e) =>
+                    setAttrDraft({ ...attrDraft, type: e.target.value as AttributeType, refDimensionId: "" })
+                  }
+                  className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-900"
+                >
+                  <option value="text">Metin</option>
+                  <option value="number">Sayı</option>
+                  <option value="date">Tarih</option>
+                  <option value="member_ref">Üye Referansı</option>
+                </select>
+                {attrDraft.type === "member_ref" && (
+                  <select
+                    value={attrDraft.refDimensionId}
+                    onChange={(e) => setAttrDraft({ ...attrDraft, refDimensionId: e.target.value })}
+                    className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-900"
+                  >
+                    <option value="">Referans boyut seç...</option>
+                    {allDims
+                      .filter((d) => d.id !== dim.id)
+                      .map((d) => (
+                        <option key={d.id} value={d.id}>
+                          {d.name}
+                        </option>
+                      ))}
+                  </select>
+                )}
+                <button
+                  onClick={addAttribute}
+                  className="w-full rounded-lg bg-blue-600 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
+                >
+                  + Özellik Ekle
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="mt-4 rounded-xl bg-white p-5 shadow-sm">

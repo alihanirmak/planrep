@@ -57,6 +57,26 @@ CREATE TABLE IF NOT EXISTS dimension_members (
   order_idx INTEGER NOT NULL DEFAULT 0
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uq_member_dim_code ON dimension_members(dimension_id, code);
+CREATE TABLE IF NOT EXISTS dimension_attributes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  dimension_id INTEGER NOT NULL,
+  code TEXT NOT NULL,
+  name TEXT NOT NULL,
+  type TEXT NOT NULL,
+  ref_dimension_id INTEGER,
+  order_idx INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_dim_attr_code ON dimension_attributes(dimension_id, code);
+CREATE INDEX IF NOT EXISTS ix_dim_attr_dimension ON dimension_attributes(dimension_id);
+CREATE TABLE IF NOT EXISTS dimension_member_attribute_values (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  member_id INTEGER NOT NULL,
+  attribute_id INTEGER NOT NULL,
+  value TEXT
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_dim_attr_value_member_attr ON dimension_member_attribute_values(member_id, attribute_id);
+CREATE INDEX IF NOT EXISTS ix_dim_attr_value_attribute ON dimension_member_attribute_values(attribute_id);
 CREATE TABLE IF NOT EXISTS models (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   tenant_id INTEGER NOT NULL DEFAULT 1,
