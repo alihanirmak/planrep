@@ -1,6 +1,7 @@
 import { sqlite } from "./db";
 import { getModelDims, type DimInfo } from "./model";
-import { upsertFacts, logFactAuditBulk, type FactWrite, type FactAuditSource } from "./facts-write";
+import { upsertFacts, logFactAuditBulk, type FactWrite, type FactAuditSource, type FactAuditEntryInput } from "./facts-write";
+import { listEffectiveMeasures, valueColumnForSlot, auditColumnsForSlot } from "./model-measures";
 
 export type FactAuditEntry = {
   id: number;
@@ -9,6 +10,9 @@ export type FactAuditEntry = {
   coords: string[];
   oldValue: number | null;
   newValue: number | null;
+  // Sadece modelin birden fazla olcusu varsa doldurulur (slot -> deger).
+  oldValues?: Record<number, number | null>;
+  newValues?: Record<number, number | null>;
   source: FactAuditSource;
   userId: number | null;
   createdAt: string;
@@ -25,9 +29,9 @@ type Row = Record<string, unknown> & {
   created_at: string;
 };
 
-function mapRow(r: Row, dims: DimInfo[]): FactAuditEntry {
+function mapRow(r: Row, dims: DimInfo[], measureSlots: number[]): FactAuditEntry {
   const slots = dims.map((d) => d.slot);
-  return {
+  const base: FactAuditEntry = {
     id: r.id,
     modelId: r.model_id,
     uploadId: r.upload_id,
@@ -38,6 +42,16 @@ function mapRow(r: Row, dims: DimInfo[]): FactAuditEntry {
     userId: r.user_id,
     createdAt: r.created_at,
   };
+  if (measureSlots.length <= 1) return base;
+  const oldValues: Record<number, number | null> = {};
+  const newValues: Record<number, number | null> = {};
+  for (const s of measureSlots) {
+    if (s === 1) continue;
+    const { old, new: n } = auditColumnsForSlot(s);
+    oldValues[s] = (r[old] as number | null | undefined) ?? null;
+    newValues[s] = (r[n] as number | null | undefined) ?? null;
+  }
+  return { ...base, oldValues, newValues };
 }
 
 // Bir model icin fact_audit kayitlarini listeler; coordsByDimCode verilirse
@@ -47,6 +61,7 @@ export function listFactAudit(
   opts?: { coordsByDimCode?: Record<string, string>; uploadId?: number; limit?: number }
 ): FactAuditEntry[] {
   const dims = getModelDims(modelId);
+  const measureSlots = listEffectiveMeasures(modelId).map((m) => m.slot);
   const where: string[] = ["model_id = ?"];
   const params: unknown[] = [modelId];
   if (opts?.coordsByDimCode) {
@@ -66,13 +81,14 @@ export function listFactAudit(
   const rows = sqlite
     .prepare(`SELECT * FROM fact_audit WHERE ${where.join(" AND ")} ORDER BY id DESC LIMIT ?`)
     .all(...params) as Row[];
-  return rows.map((r) => mapRow(r, dims));
+  return rows.map((r) => mapRow(r, dims, measureSlots));
 }
 
 export function getFactAuditEntry(id: number): FactAuditEntry | null {
   const row = sqlite.prepare("SELECT * FROM fact_audit WHERE id = ?").get(id) as Row | undefined;
   if (!row) return null;
-  return mapRow(row, getModelDims(row.model_id));
+  const measureSlots = listEffectiveMeasures(row.model_id).map((m) => m.slot);
+  return mapRow(row, getModelDims(row.model_id), measureSlots);
 }
 
 export class FactAuditNotFoundError extends Error {
@@ -87,33 +103,47 @@ export class FactAuditNotFoundError extends Error {
 // Donus degeri, cagiran tarafin (orn. "hucre bazli undo/redo yigini")
 // bu geri alma islemini TEKRAR geri alarak zincirleme redo yapabilmesini
 // saglar — her rollback cagrisi, bir onceki durumu YENIDEN tersine cevirir.
-// - oldValue tanimliysa: o degeri tekrar yazar (upsertFacts uzerinden — bu
-//   da yeni bir 'write' kaydi uretir ve lock/is kurali kontrollerinden gecer;
-//   kilitli/kural-ihlalli bir geri alma reddedilir).
-// - oldValue null ise (hucre o degisiklikten once yoktu): satir silinir ve
-//   bu durum 'rollback' kaynakli ayri bir fact_audit kaydiyla belgelenir.
+// - oldValue tanimliysa: o degeri (coklu-olcu ise TUM olculeri) tekrar
+//   yazar (upsertFacts uzerinden — bu da yeni bir 'write' kaydi uretir ve
+//   lock/is kurali kontrollerinden gecer; kilitli/kural-ihlalli bir geri
+//   alma reddedilir).
+// - oldValue null ise (hucre o degisiklikten once yoktu — facts.value
+//   NOT NULL oldugundan bu her zaman "satir hic yoktu" demektir, coklu-olcu
+//   ile de degismez): satir silinir ve bu durum 'rollback' kaynakli ayri
+//   bir fact_audit kaydiyla belgelenir.
 export function rollbackFactAudit(auditId: number, userId: number | null): FactAuditEntry {
   const entry = getFactAuditEntry(auditId);
   if (!entry) throw new FactAuditNotFoundError();
   const dims = getModelDims(entry.modelId);
+  const measures = listEffectiveMeasures(entry.modelId);
+  const measureSlots = measures.map((m) => m.slot);
   const now = new Date().toISOString();
 
   if (entry.oldValue == null) {
     const slots = dims.map((d) => d.slot);
     const whereCoord = slots.map((s) => `d${s} = ?`).join(" AND ");
+    const measureSelCols = measureSlots.map((s) => `${valueColumnForSlot(s)} AS ${valueColumnForSlot(s)}`).join(", ");
     const current = sqlite
-      .prepare(`SELECT value FROM facts WHERE model_id = ? AND ${whereCoord}`)
-      .get(entry.modelId, ...entry.coords) as { value: number } | undefined;
+      .prepare(`SELECT ${measureSelCols} FROM facts WHERE model_id = ? AND ${whereCoord}`)
+      .get(entry.modelId, ...entry.coords) as Record<string, number | null> | undefined;
     sqlite.prepare(`DELETE FROM facts WHERE model_id = ? AND ${whereCoord}`).run(entry.modelId, ...entry.coords);
-    logFactAuditBulk(
-      entry.modelId,
-      null,
-      slots,
-      [{ coords: entry.coords, oldValue: current?.value ?? null, newValue: null }],
-      "rollback",
-      userId,
-      now
-    );
+    const auditEntry: FactAuditEntryInput = {
+      coords: entry.coords,
+      oldValue: current?.[valueColumnForSlot(1)] ?? null,
+      newValue: null,
+    };
+    if (measureSlots.length > 1) {
+      const oldValues: Record<number, number | null> = {};
+      const newValues: Record<number, number | null> = {};
+      for (const s of measureSlots) {
+        if (s === 1) continue;
+        oldValues[s] = current?.[valueColumnForSlot(s)] ?? null;
+        newValues[s] = null;
+      }
+      auditEntry.oldValues = oldValues;
+      auditEntry.newValues = newValues;
+    }
+    logFactAuditBulk(entry.modelId, null, slots, measureSlots, [auditEntry], "rollback", userId, now);
     const newId = (sqlite.prepare("SELECT last_insert_rowid() AS id").get() as { id: number }).id;
     const created = getFactAuditEntry(newId);
     if (!created) throw new FactAuditNotFoundError();
@@ -127,7 +157,7 @@ export function rollbackFactAudit(auditId: number, userId: number | null): FactA
       )
       .run(entry.modelId, `Hücre geri alma #${auditId}`, userId, 1, now).lastInsertRowid
   );
-  const fw: FactWrite = { coords: entry.coords, value: entry.oldValue };
+  const fw: FactWrite = { coords: entry.coords, value: entry.oldValue, values: entry.oldValues };
   upsertFacts(entry.modelId, dims, [fw], uploadId, now, userId);
   // upsertFacts tek satir yaziyor; bu sentetik upload'a ait TEK fact_audit
   // kaydi upload_id uzerinden kesin olarak bulunabilir (eszamanli diger

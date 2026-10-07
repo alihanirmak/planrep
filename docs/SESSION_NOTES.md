@@ -403,3 +403,63 @@ Tamamlanan Faz 3 maddeleri (hepsi ayrı commit):
   güncellendi, "çoklu-model join" maddesine "ön koşul artık hazır" notu
   eklendi.
 - **Henüz commit edilmedi** — sıradaki adım commit+push.
+
+## 2026-10-07 — Çoklu-ölçü (multi-measure) Faz A çekirdek TAMAMLANDI
+
+- Backlog'taki "sınırsız/çoklu değer (measure) kolonu" maddesi için kapsam
+  netleştirildi: tam EAV DEĞİL, mevcut `d1..d16` sabit-kolon boyut tasarımıyla
+  AYNI desen — additive, geriye-uyumlu sabit-kolon genişlemesi
+  (`value`→`value2..value8`, `MAX_MODEL_MEASURES=8`). "Faz A (çekirdek)" bu
+  oturumda bitirildi; UI/uç nokta genişletmesi (upload/facts/scenario-copy'ye
+  çoklu-ölçü GİRİŞİ, business-rules yönetim UI'ına ölçü seçici, formül/pivot/
+  export'un çoklu ölçüyü göstermesi) KASITLI OLARAK Faz B'ye bırakıldı.
+- **Yeni `lib/model-measures.ts`:** `model_measures` tablosu için CRUD
+  (`getModelMeasures`/`createModelMeasure`/`updateMeasure`/`deleteModelMeasure`)
+  + `listEffectiveMeasures` — kritik geriye-uyumluluk fonksiyonu: bir model
+  için hiç measure satırı yoksa slot 1'i sanal `"VALUE"` ölçüsü olarak döner
+  (DB'de karşılığı yok), measure açıkça tanımlanmışsa gerçek satırları döner.
+  Bu sayede `value` kolonunu doğrudan okuyan ~20 dosya/mevcut 314 test
+  HİÇBİR DEĞİŞİKLİK GEREKTİRMEDEN çalışmaya devam ediyor. Silme güvenliği:
+  slot 1 (facts.value, NOT NULL) başka ölçüler varken silinemez
+  (`PrimaryMeasureInUseError`), iş kuralı tarafından kullanılan ölçü
+  silinemez (`MeasureInUseError`, dimensions'daki `ref_in_use` ile AYNI
+  desen).
+- **Şema:** `lib/db/schema.ts` + `lib/db/index.ts` — `model_measures` tablosu,
+  `facts`/`fact_audit`'e `value2..value8`/`old_value2..new_value8` kolonları,
+  `business_rules.measure_code` (nullable — null=tüm ölçülere uygulanır).
+  Migration idempotent `ALTER TABLE ... ADD COLUMN` ile, gerçek dev DB'de
+  doğrulandı (hem `facts` hem `fact_audit`'te tüm yeni kolonlar mevcut).
+- **`lib/facts-write.ts` genişletmesi (asıl büyük iş):** `FactWrite` tipine
+  opsiyonel `values?: Record<slot, number|null>` eklendi (slot 1 hâlâ
+  zorunlu `value` alanından, geriye uyumlu). `upsertFacts`/`revertUpload`
+  modelin ölçü sayısını `listEffectiveMeasures`'tan okur — tek-ölçü
+  modellerde (büyük çoğunluk) `measureSlots` hep `[1]` kalır ve "slot > 1"
+  kod yolları hiç devreye girmez (davranış birebir eskisiyle aynı).
+  `bulkInsertFacts`/`logFactAuditBulk` dinamik SQL üretimi slot listesine
+  göre genişletildi (toplu INSERT stratejisi korunarak).
+- **`lib/fact-audit.ts`:** rollback mantığı çoklu-ölçü farkındalığıyla
+  genişletildi — eski/yeni tüm ölçü değerleri birlikte geri yazılır/okunur.
+- **`lib/business-rules.ts`:** `BusinessRule.measureCode` (null=tüm
+  ölçülere uygulanır, dolu=sadece o ölçü koduna ait yazımlar için
+  değerlendirilir). `evaluateBusinessRules` artık opsiyonel `measureCode`
+  parametresi alıyor; `upsertFacts` her ölçü slotu için ayrı ayrı çağırıyor.
+  `/api/business-rules` POST/PATCH şemalarına `measureCode` alanı eklendi
+  (API seviyesinde tam wiring, UI seçici Faz B'de).
+- **Yeni ölçü yönetim API'si:** `/api/models/[id]/measures` (GET liste/POST
+  oluştur — kod tekilliği + `MAX_MODEL_MEASURES` limit kontrolü),
+  `/api/models/[id]/measures/[measureId]` (PATCH sadece `name` — `code`/
+  `slot` KASITLI DEĞİŞTİRİLEMEZ/DELETE — yukarıdaki güvenlik kontrolleriyle).
+  `model_dimensions`/`dimension_attributes` API'leriyle BİREBİR AYNI desen
+  (auth+tenant izolasyonu+`parseIdParam`+`logAudit`).
+- 24 yeni test: `model-measures.test.ts` (13) + `facts-write.test.ts`'e
+  çoklu-ölçü upsert/revert senaryoları + `fact-audit.test.ts`'e çoklu-ölçü
+  rollback + `business-rules.test.ts`'e `measureCode` filtreleme — toplam
+  **338 test**. Migration gerçek dev DB'de doğrulandı. `tsc --noEmit` temiz,
+  `eslint` 0 hata (1 önceden var olan ilişkisiz uyarı — `Sidebar.tsx`),
+  `next build` başarılı (61 route derlendi, 3 önceden var olan ilişkisiz
+  uyarı — `dynamic filesystem access`/axet-cli spawn, measure işiyle
+  ilgisiz).
+- `docs/ROADMAP.md`'deki "sınırsız/çoklu değer (measure) kolonu" backlog
+  maddesi "Faz A (çekirdek) TAMAMLANDI" olarak güncellendi, Faz B'ye
+  bırakılan kapsam (UI/uç nokta genişletmesi) açıkça not edildi.
+- **Henüz commit edilmedi** — sıradaki adım commit+push.

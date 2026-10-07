@@ -328,3 +328,130 @@ describe("fact_audit — hucre bazli denetim izi", () => {
     expect(revertRow).toMatchObject({ old_value: 2, new_value: 1, source: "revert", user_id: 99 });
   });
 });
+
+describe("upsertFacts + coklu-olcu (measures)", () => {
+  let multiModelId: number;
+
+  beforeAll(async () => {
+    multiModelId = Number(
+      sqlite
+        .prepare("INSERT INTO models (code, name, created_at) VALUES (?,?,?)")
+        .run("FWMULTI", "Facts Write Multi-Measure Test", new Date().toISOString()).lastInsertRowid
+    );
+    const mm = await import("./model-measures");
+    mm.createModelMeasure({ modelId: multiModelId, code: "AMOUNT", name: "Tutar" });
+    mm.createModelMeasure({ modelId: multiModelId, code: "QTY", name: "Miktar" });
+  });
+
+  function multiRow(d1: string, d2: string) {
+    return sqlite
+      .prepare("SELECT value, value2 FROM facts WHERE model_id=? AND d1=? AND d2=?")
+      .get(multiModelId, d1, d2) as { value: number; value2: number | null } | undefined;
+  }
+
+  it("value (slot1) + values[2] (slot2) ayni satira yazilir", () => {
+    const uploadId = newUpload("multi-1.csv");
+    upsertFacts(
+      multiModelId,
+      dims,
+      [{ coords: ["M1", "X"], value: 100, values: { 2: 7 } }],
+      uploadId,
+      new Date().toISOString()
+    );
+    expect(multiRow("M1", "X")).toEqual({ value: 100, value2: 7 });
+  });
+
+  it("values[2] belirtilmezse NULL yazilir (tam-satir sil-yeniden-yaz semantigi)", () => {
+    const uploadId = newUpload("multi-2.csv");
+    upsertFacts(multiModelId, dims, [{ coords: ["M2", "X"], value: 50 }], uploadId, new Date().toISOString());
+    expect(multiRow("M2", "X")).toEqual({ value: 50, value2: null });
+  });
+
+  it("ikinci upsert her iki slotu da gunceller, replaced_rows coklu-deger tasir", () => {
+    const uploadA = newUpload("multi-3a.csv");
+    upsertFacts(
+      multiModelId,
+      dims,
+      [{ coords: ["M3", "X"], value: 10, values: { 2: 1 } }],
+      uploadA,
+      new Date().toISOString()
+    );
+    const uploadB = newUpload("multi-3b.csv");
+    upsertFacts(
+      multiModelId,
+      dims,
+      [{ coords: ["M3", "X"], value: 20, values: { 2: 2 } }],
+      uploadB,
+      new Date().toISOString()
+    );
+    expect(multiRow("M3", "X")).toEqual({ value: 20, value2: 2 });
+
+    const replaced = JSON.parse(
+      (sqlite.prepare("SELECT replaced_rows FROM uploads WHERE id=?").get(uploadB) as { replaced_rows: string })
+        .replaced_rows
+    );
+    expect(replaced[0]).toMatchObject({ coords: ["M3", "X"], value: 10, values: { "2": 1 } });
+  });
+
+  it("fact_audit old_value2/new_value2 kolonlarini da kaydeder", () => {
+    const uploadA = newUpload("multi-4a.csv");
+    upsertFacts(
+      multiModelId,
+      dims,
+      [{ coords: ["M4", "X"], value: 1, values: { 2: 11 } }],
+      uploadA,
+      new Date().toISOString(),
+      7
+    );
+    const uploadB = newUpload("multi-4b.csv");
+    upsertFacts(
+      multiModelId,
+      dims,
+      [{ coords: ["M4", "X"], value: 2, values: { 2: 22 } }],
+      uploadB,
+      new Date().toISOString(),
+      7
+    );
+    const rows = sqlite
+      .prepare(
+        "SELECT old_value, new_value, old_value2, new_value2 FROM fact_audit WHERE model_id=? AND d1=? AND d2=? ORDER BY id ASC"
+      )
+      .all(multiModelId, "M4", "X") as Array<{
+      old_value: number | null;
+      new_value: number | null;
+      old_value2: number | null;
+      new_value2: number | null;
+    }>;
+    expect(rows).toHaveLength(2);
+    expect(rows[1]).toMatchObject({ old_value: 1, new_value: 2, old_value2: 11, new_value2: 22 });
+  });
+
+  it("revertUpload coklu-olcuyu dogru geri yukler", () => {
+    const uploadA = newUpload("multi-revert-a.csv");
+    upsertFacts(
+      multiModelId,
+      dims,
+      [{ coords: ["M5", "X"], value: 100, values: { 2: 5 } }],
+      uploadA,
+      new Date().toISOString()
+    );
+    const uploadB = newUpload("multi-revert-b.csv");
+    upsertFacts(
+      multiModelId,
+      dims,
+      [{ coords: ["M5", "X"], value: 200, values: { 2: 9 } }],
+      uploadB,
+      new Date().toISOString()
+    );
+    expect(multiRow("M5", "X")).toEqual({ value: 200, value2: 9 });
+
+    revertUpload(uploadB, multiModelId, dims);
+    expect(multiRow("M5", "X")).toEqual({ value: 100, value2: 5 });
+  });
+
+  it("tek-olcu model davranisi coklu-olcu modelden tamamen bagimsizdir (regresyon)", () => {
+    const uploadId = newUpload("single-after-multi.csv");
+    upsertFacts(modelId, dims, [{ coords: ["AUD_FINAL", "X"], value: 777 }], uploadId, new Date().toISOString());
+    expect(factValue("AUD_FINAL", "X")).toBe(777);
+  });
+});

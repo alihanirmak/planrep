@@ -10,6 +10,7 @@ const patchSchema = z.object({
   scopeFilters: z.record(z.string(), z.array(z.string())).optional(),
   op: z.enum(["<", ">", "<=", ">=", "=", "<>"]).optional(),
   value: z.number().optional(),
+  measureCode: z.string().max(40).nullish(),
   severity: z.enum(["block", "warn"]).optional(),
   message: z.string().max(300).nullish(),
   active: z.boolean().optional(),

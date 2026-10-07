@@ -93,12 +93,23 @@ CREATE TABLE IF NOT EXISTS model_dimensions (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uq_modeldim_slot ON model_dimensions(model_id, slot);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_modeldim_dim ON model_dimensions(model_id, dimension_id);
+CREATE TABLE IF NOT EXISTS model_measures (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  model_id INTEGER NOT NULL,
+  code TEXT NOT NULL,
+  name TEXT NOT NULL,
+  slot INTEGER NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_modelmeasure_slot ON model_measures(model_id, slot);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_modelmeasure_code ON model_measures(model_id, code);
 CREATE TABLE IF NOT EXISTS facts (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   model_id INTEGER NOT NULL,
   d1 TEXT, d2 TEXT, d3 TEXT, d4 TEXT, d5 TEXT, d6 TEXT, d7 TEXT, d8 TEXT,
   d9 TEXT, d10 TEXT, d11 TEXT, d12 TEXT, d13 TEXT, d14 TEXT, d15 TEXT, d16 TEXT,
   value REAL NOT NULL,
+  value2 REAL, value3 REAL, value4 REAL, value5 REAL, value6 REAL, value7 REAL, value8 REAL,
   upload_id INTEGER,
   updated_at TEXT NOT NULL
 );
@@ -197,6 +208,7 @@ CREATE TABLE IF NOT EXISTS business_rules (
   scope_filters TEXT NOT NULL,
   op TEXT NOT NULL,
   value REAL NOT NULL,
+  measure_code TEXT,
   severity TEXT NOT NULL DEFAULT 'block',
   message TEXT,
   active INTEGER NOT NULL DEFAULT 1,
@@ -212,6 +224,13 @@ CREATE TABLE IF NOT EXISTS fact_audit (
   d9 TEXT, d10 TEXT, d11 TEXT, d12 TEXT, d13 TEXT, d14 TEXT, d15 TEXT, d16 TEXT,
   old_value REAL,
   new_value REAL,
+  old_value2 REAL, new_value2 REAL,
+  old_value3 REAL, new_value3 REAL,
+  old_value4 REAL, new_value4 REAL,
+  old_value5 REAL, new_value5 REAL,
+  old_value6 REAL, new_value6 REAL,
+  old_value7 REAL, new_value7 REAL,
+  old_value8 REAL, new_value8 REAL,
   source TEXT NOT NULL DEFAULT 'write',
   user_id INTEGER,
   created_at TEXT NOT NULL
@@ -316,6 +335,31 @@ for (const migration of [
   "ALTER TABLE fact_audit ADD COLUMN d14 TEXT",
   "ALTER TABLE fact_audit ADD COLUMN d15 TEXT",
   "ALTER TABLE fact_audit ADD COLUMN d16 TEXT",
+  // Model basina olculer (measures) 1 -> 8'e cikarildi (bkz. lib/model-measures.ts
+  // MAX_MODEL_MEASURES) — mevcut veritabanlarina yeni value2..value8 /
+  // old_value2..new_value8 kolonlari + business_rules.measure_code eklenir.
+  "ALTER TABLE facts ADD COLUMN value2 REAL",
+  "ALTER TABLE facts ADD COLUMN value3 REAL",
+  "ALTER TABLE facts ADD COLUMN value4 REAL",
+  "ALTER TABLE facts ADD COLUMN value5 REAL",
+  "ALTER TABLE facts ADD COLUMN value6 REAL",
+  "ALTER TABLE facts ADD COLUMN value7 REAL",
+  "ALTER TABLE facts ADD COLUMN value8 REAL",
+  "ALTER TABLE fact_audit ADD COLUMN old_value2 REAL",
+  "ALTER TABLE fact_audit ADD COLUMN new_value2 REAL",
+  "ALTER TABLE fact_audit ADD COLUMN old_value3 REAL",
+  "ALTER TABLE fact_audit ADD COLUMN new_value3 REAL",
+  "ALTER TABLE fact_audit ADD COLUMN old_value4 REAL",
+  "ALTER TABLE fact_audit ADD COLUMN new_value4 REAL",
+  "ALTER TABLE fact_audit ADD COLUMN old_value5 REAL",
+  "ALTER TABLE fact_audit ADD COLUMN new_value5 REAL",
+  "ALTER TABLE fact_audit ADD COLUMN old_value6 REAL",
+  "ALTER TABLE fact_audit ADD COLUMN new_value6 REAL",
+  "ALTER TABLE fact_audit ADD COLUMN old_value7 REAL",
+  "ALTER TABLE fact_audit ADD COLUMN new_value7 REAL",
+  "ALTER TABLE fact_audit ADD COLUMN old_value8 REAL",
+  "ALTER TABLE fact_audit ADD COLUMN new_value8 REAL",
+  "ALTER TABLE business_rules ADD COLUMN measure_code TEXT",
 ]) {
   try {
     sqlite.exec(migration);

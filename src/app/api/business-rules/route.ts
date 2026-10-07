@@ -24,6 +24,7 @@ const createSchema = z.object({
   scopeFilters: z.record(z.string(), z.array(z.string())).default({}),
   op: z.enum(["<", ">", "<=", ">=", "=", "<>"]),
   value: z.number(),
+  measureCode: z.string().max(40).nullish(),
   severity: z.enum(["block", "warn"]).default("block"),
   message: z.string().max(300).nullish(),
 });

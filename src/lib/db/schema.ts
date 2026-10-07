@@ -171,6 +171,26 @@ export const modelDimensions = sqliteTable(
   ]
 );
 
+// Bir modelin olculeri (measures): slot 1 -> facts.value (mevcut kolon,
+// DEGISTIRILMEDI), slot 2..8 -> facts.value2..value8. Hic satir yoksa model
+// "varsayilan tekil olcu" modundadir (bkz. lib/model-measures.ts
+// listEffectiveMeasures) — GERIYE UYUMLULUK icin KASITLI.
+export const modelMeasures = sqliteTable(
+  "model_measures",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    modelId: integer("model_id").notNull(),
+    code: text("code").notNull(),
+    name: text("name").notNull(),
+    slot: integer("slot").notNull(), // 1..8
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [
+    uniqueIndex("uq_modelmeasure_slot").on(t.modelId, t.slot),
+    uniqueIndex("uq_modelmeasure_code").on(t.modelId, t.code),
+  ]
+);
+
 export const facts = sqliteTable(
   "facts",
   {
@@ -193,6 +213,13 @@ export const facts = sqliteTable(
     d15: text("d15"),
     d16: text("d16"),
     value: real("value").notNull(),
+    value2: real("value2"),
+    value3: real("value3"),
+    value4: real("value4"),
+    value5: real("value5"),
+    value6: real("value6"),
+    value7: real("value7"),
+    value8: real("value8"),
     uploadId: integer("upload_id"),
     updatedAt: text("updated_at").notNull(),
   },
@@ -320,6 +347,11 @@ export const businessRules = sqliteTable(
     scopeFilters: text("scope_filters").notNull(),
     op: text("op", { enum: ["<", ">", "<=", ">=", "=", "<>"] }).notNull(),
     value: real("value").notNull(),
+    // null = varsayilan olcu (slot 1/"value") — geriye uyumlu, mevcut
+    // kurallarin hicbirinde bu kolon doldurulmamistir. Dolu ise, kural
+    // sadece o measure code'una ait yazimlar icin degerlendirilir (bkz.
+    // lib/business-rules.ts evaluateBusinessRules).
+    measureCode: text("measure_code"),
     severity: text("severity", { enum: ["block", "warn"] })
       .notNull()
       .default("block"),
@@ -358,6 +390,20 @@ export const factAudit = sqliteTable(
     d16: text("d16"),
     oldValue: real("old_value"),
     newValue: real("new_value"),
+    oldValue2: real("old_value2"),
+    newValue2: real("new_value2"),
+    oldValue3: real("old_value3"),
+    newValue3: real("new_value3"),
+    oldValue4: real("old_value4"),
+    newValue4: real("new_value4"),
+    oldValue5: real("old_value5"),
+    newValue5: real("new_value5"),
+    oldValue6: real("old_value6"),
+    newValue6: real("new_value6"),
+    oldValue7: real("old_value7"),
+    newValue7: real("new_value7"),
+    oldValue8: real("old_value8"),
+    newValue8: real("new_value8"),
     source: text("source", { enum: ["write", "revert", "rollback"] })
       .notNull()
       .default("write"),

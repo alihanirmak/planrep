@@ -131,3 +131,85 @@ describe("rollbackFactAudit", () => {
     expect(() => rollbackFactAudit(999999, 1)).toThrow();
   });
 });
+
+describe("rollbackFactAudit — coklu-olcu", () => {
+  let multiModelId: number;
+
+  beforeAll(async () => {
+    multiModelId = Number(
+      sqlite
+        .prepare("INSERT INTO models (code, name, created_at) VALUES (?,?,?)")
+        .run("FAMULTI", "Fact Audit Multi-Measure Test", new Date().toISOString()).lastInsertRowid
+    );
+    const d1Id = (sqlite.prepare("SELECT id FROM dimensions WHERE code='FA_D1'").get() as { id: number }).id;
+    const d2Id = (sqlite.prepare("SELECT id FROM dimensions WHERE code='FA_D2'").get() as { id: number }).id;
+    sqlite
+      .prepare("INSERT INTO model_dimensions (model_id, dimension_id, slot) VALUES (?,?,1)")
+      .run(multiModelId, d1Id);
+    sqlite
+      .prepare("INSERT INTO model_dimensions (model_id, dimension_id, slot) VALUES (?,?,2)")
+      .run(multiModelId, d2Id);
+    const mm = await import("./model-measures");
+    mm.createModelMeasure({ modelId: multiModelId, code: "AMOUNT", name: "Tutar" });
+    mm.createModelMeasure({ modelId: multiModelId, code: "QTY", name: "Miktar" });
+  });
+
+  function multiRow(d1: string, d2: string) {
+    return sqlite
+      .prepare("SELECT value, value2 FROM facts WHERE model_id=? AND d1=? AND d2=?")
+      .get(multiModelId, d1, d2) as { value: number; value2: number | null } | undefined;
+  }
+
+  it("oldValues/newValues'i tasir ve rollback TUM olculeri geri yazar", () => {
+    const multiDims = getModelDims(multiModelId);
+    const uploadId = newUpload();
+    upsertFacts(
+      multiModelId,
+      multiDims,
+      [{ coords: ["MA1", "X"], value: 10, values: { 2: 100 } }],
+      uploadId,
+      new Date().toISOString(),
+      1
+    );
+    const uploadId2 = newUpload();
+    upsertFacts(
+      multiModelId,
+      multiDims,
+      [{ coords: ["MA1", "X"], value: 20, values: { 2: 200 } }],
+      uploadId2,
+      new Date().toISOString(),
+      1
+    );
+
+    const history = listFactAudit(multiModelId, { coordsByDimCode: { FA_D1: "MA1", FA_D2: "X" } });
+    const writeEntry = history.find((h) => h.oldValue === 10 && h.newValue === 20)!;
+    expect(writeEntry.oldValues).toEqual({ 2: 100 });
+    expect(writeEntry.newValues).toEqual({ 2: 200 });
+
+    const created = rollbackFactAudit(writeEntry.id, 1);
+    expect(created.oldValue).toBe(20);
+    expect(created.newValue).toBe(10);
+    expect(created.newValues).toEqual({ 2: 100 });
+    expect(multiRow("MA1", "X")).toEqual({ value: 10, value2: 100 });
+  });
+
+  it("oldValue null (hucre o degisiklikten once yoktu) ise satir silinir, coklu-olcu de dahil", () => {
+    const multiDims = getModelDims(multiModelId);
+    const uploadId = newUpload();
+    upsertFacts(
+      multiModelId,
+      multiDims,
+      [{ coords: ["MA2", "X"], value: 5, values: { 2: 50 } }],
+      uploadId,
+      new Date().toISOString(),
+      1
+    );
+    const history = listFactAudit(multiModelId, { coordsByDimCode: { FA_D1: "MA2", FA_D2: "X" } });
+    const writeEntry = history.find((h) => h.oldValue === null && h.newValue === 5)!;
+
+    const created = rollbackFactAudit(writeEntry.id, 1);
+    expect(created.source).toBe("rollback");
+    expect(created.oldValues).toEqual({ 2: 50 });
+    expect(multiRow("MA2", "X")).toBeUndefined();
+  });
+});

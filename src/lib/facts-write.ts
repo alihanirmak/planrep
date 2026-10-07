@@ -4,6 +4,7 @@ import { chunkArray } from "./fact-filters";
 import { findBlockingLock, WorkflowLockError } from "./workflow";
 import { evaluateBusinessRules, BusinessRuleError, type RuleViolation } from "./business-rules";
 import { cacheDeleteByPrefix } from "./cache";
+import { listEffectiveMeasures, valueColumnForSlot, auditColumnsForSlot } from "./model-measures";
 
 // upsertFacts/revertUpload bu modelin tum pivot/query cache sonuclarini
 // gecersiz kilar — veri degistigi icin TTL dolana kadar bekletmek yerine
@@ -16,9 +17,14 @@ function invalidateModelCache(modelId: number) {
   cacheDeleteByPrefix(`query:v1:${modelId}:`).catch(() => {});
 }
 
-export type FactWrite = { coords: string[]; value: number };
+// value: slot 1 (facts.value kolonu) — ZORUNLU, DEGISTIRILMEDI (geriye
+// uyumluluk). values: slot 2..8 icin opsiyonel ek olcu degerleri — bir slot
+// haritada yoksa veya null ise o olcu icin NULL yazilir (bu fonksiyon satiri
+// TAMAMEN SIL-YENIDEN-YAZ semantigiyle calistigindan "degismeden kalma" diye
+// bir ara durum yok, bkz. asagidaki upsertFacts yorumu).
+export type FactWrite = { coords: string[]; value: number; values?: Record<number, number | null> };
 
-type ReplacedRow = { coords: string[]; value: number };
+type ReplacedRow = { coords: string[]; value: number; values?: Record<number, number | null> };
 
 // better-sqlite3'un Statement.run/.all tip tanimlari, elimizdeki `unknown[]`
 // (tuple olmayan) parametre dizisiyle dogrudan spread edilince TS2556 veriyor;
@@ -31,18 +37,29 @@ function runStmt(stmt: ReturnType<typeof sqlite.prepare>, params: unknown[]) {
 // grup boyutu (eski SQLite surumlerindeki 999 parametre siniri icin savunmaci).
 const ROWS_PER_INSERT = 80;
 
-function buildMultiRowInsertSql(colList: string, slotCount: number, rowCount: number): string {
-  const rowPlaceholder = `(?, ${Array(slotCount).fill("?").join(",")}, ?, ?, ?)`;
+function buildMultiRowInsertSql(
+  colList: string,
+  slotCount: number,
+  measureSlots: number[],
+  rowCount: number
+): string {
+  const measureColList = measureSlots.map(valueColumnForSlot).join(",");
+  const rowPlaceholder = `(?, ${Array(slotCount).fill("?").join(",")}, ${measureSlots
+    .map(() => "?")
+    .join(",")}, ?, ?)`;
   const values = Array(rowCount).fill(rowPlaceholder).join(", ");
-  return `INSERT INTO facts (model_id, ${colList}, value, upload_id, updated_at) VALUES ${values}`;
+  return `INSERT INTO facts (model_id, ${colList}, ${measureColList}, upload_id, updated_at) VALUES ${values}`;
 }
 
-// Bir dizi FactWrite'i, model_id + coords + value + upload_id + updated_at
-// siraliyla duzlestirip toplu (multi-row VALUES) INSERT'ler halinde yazar.
+// Bir dizi FactWrite'i, model_id + coords + (olcu slotlari) + upload_id +
+// updated_at siraliyla duzlestirip toplu (multi-row VALUES) INSERT'ler
+// halinde yazar. measureSlots sirali ([1] veya [1,2,3,...]) — slot 1 her
+// zaman f.value'den gelir, digerleri f.values[slot]'tan (yoksa/null ise NULL).
 function bulkInsertFacts(
   modelId: number,
   colList: string,
   slotCount: number,
+  measureSlots: number[],
   rows: FactWrite[],
   uploadId: number | null,
   now: string
@@ -51,23 +68,39 @@ function bulkInsertFacts(
   for (const chunk of chunkArray(rows, ROWS_PER_INSERT)) {
     let stmt = stmtCache.get(chunk.length);
     if (!stmt) {
-      stmt = sqlite.prepare(buildMultiRowInsertSql(colList, slotCount, chunk.length));
+      stmt = sqlite.prepare(buildMultiRowInsertSql(colList, slotCount, measureSlots, chunk.length));
       stmtCache.set(chunk.length, stmt);
     }
     const params: unknown[] = [];
-    for (const f of chunk) params.push(modelId, ...f.coords, f.value, uploadId, now);
+    for (const f of chunk) {
+      params.push(modelId, ...f.coords);
+      for (const slot of measureSlots) {
+        params.push(slot === 1 ? f.value : f.values?.[slot] ?? null);
+      }
+      params.push(uploadId, now);
+    }
     runStmt(stmt, params);
   }
 }
 
 export type FactAuditSource = "write" | "revert" | "rollback";
-type FactAuditEntryInput = { coords: string[]; oldValue: number | null; newValue: number | null };
+export type FactAuditEntryInput = {
+  coords: string[];
+  oldValue: number | null;
+  newValue: number | null;
+  // Sadece modelin birden fazla olcusu varsa doldurulur (slot -> deger).
+  oldValues?: Record<number, number | null>;
+  newValues?: Record<number, number | null>;
+};
 
-// Hucre bazli yazma gecmisini (fact_audit) toplu olarak kaydeder.
+// Hucre bazli yazma gecmisini (fact_audit) toplu olarak kaydeder. measureSlots
+// sirali ([1] veya [1,2,...]) — slot 1 her zaman oldValue/newValue'dan gelir,
+// digerleri oldValues/newValues[slot]'tan.
 export function logFactAuditBulk(
   modelId: number,
   uploadId: number | null,
   slots: number[],
+  measureSlots: number[],
   entries: FactAuditEntryInput[],
   source: FactAuditSource,
   userId: number | null,
@@ -75,21 +108,34 @@ export function logFactAuditBulk(
 ) {
   if (entries.length === 0) return;
   const colList = slots.map((s) => `d${s}`).join(",");
+  const measureColList = measureSlots
+    .map((s) => {
+      const { old, new: n } = auditColumnsForSlot(s);
+      return `${old},${n}`;
+    })
+    .join(",");
   const stmtCache = new Map<number, ReturnType<typeof sqlite.prepare>>();
   for (const chunk of chunkArray(entries, ROWS_PER_INSERT)) {
     let stmt = stmtCache.get(chunk.length);
     if (!stmt) {
-      const rowPlaceholder = `(?, ?, ${Array(slots.length).fill("?").join(",")}, ?, ?, ?, ?, ?)`;
+      const rowPlaceholder = `(?, ?, ${Array(slots.length).fill("?").join(",")}, ${measureSlots
+        .map(() => "?,?")
+        .join(",")}, ?, ?, ?)`;
       const values = Array(chunk.length).fill(rowPlaceholder).join(", ");
       stmt = sqlite.prepare(
-        `INSERT INTO fact_audit (model_id, upload_id, ${colList}, old_value, new_value, source, user_id, created_at)
+        `INSERT INTO fact_audit (model_id, upload_id, ${colList}, ${measureColList}, source, user_id, created_at)
          VALUES ${values}`
       );
       stmtCache.set(chunk.length, stmt);
     }
     const params: unknown[] = [];
     for (const e of chunk) {
-      params.push(modelId, uploadId, ...e.coords, e.oldValue, e.newValue, source, userId, now);
+      params.push(modelId, uploadId, ...e.coords);
+      for (const slot of measureSlots) {
+        if (slot === 1) params.push(e.oldValue, e.newValue);
+        else params.push(e.oldValues?.[slot] ?? null, e.newValues?.[slot] ?? null);
+      }
+      params.push(source, userId, now);
     }
     runStmt(stmt, params);
   }
@@ -100,6 +146,14 @@ export type UpsertFactsResult = { warnings: RuleViolation[] };
 // Upsert: ayni koordinattaki eski degerler silinir ama uploads.replaced_rows'a
 // yedeklenir; geri almada bire bir geri yuklenir. Her satir icin ayrica
 // fact_audit'e eski/yeni deger kaydedilir (hucre bazli denetim izi).
+//
+// COKLU-OLCU NOTU: modelin kac olcusu oldugu (listEffectiveMeasures) her
+// cagrida DB'den okunur. Tek-olcu modellerde (buyuk cogunluk) measureSlots
+// hep [1] olur ve asagidaki tum "slot > 1" kod yollari devreye GIRMEZ —
+// davranis bu degisiklikten ONCEki ile BIREBIR AYNI kalir. Bir satir bir
+// olcuyu f.values'ta BELIRTMEMISSE o olcu icin NULL yazilir (TAM SATIR
+// SIL-YENIDEN-YAZ semantigi — "degismeden kalma" ara durumu yok, coklu-olcu
+// yazarken HER olcuyu birlikte gondermek cagiranin sorumlulugundadir).
 //
 // Toplu (bulk) strateji: N satir icin eskiden N kez SELECT+DELETE+INSERT
 // (3N sorgu) calisiyordu. Simdi: tum yeni koordinatlar bir TEMP tabloya tek
@@ -116,6 +170,9 @@ export function upsertFacts(
 ): UpsertFactsResult {
   if (rows.length === 0) return { warnings: [] };
   const slots = dims.map((d) => d.slot);
+  const measures = listEffectiveMeasures(modelId);
+  const measureSlots = measures.map((m) => m.slot);
+  const measureCodeBySlot = new Map(measures.map((m) => [m.slot, m.code]));
 
   const blocking: RuleViolation[] = [];
   const warnings: RuleViolation[] = [];
@@ -126,14 +183,21 @@ export function upsertFacts(
     });
     const blocker = findBlockingLock(modelId, dims, coordsByDimCode);
     if (blocker) throw new WorkflowLockError(blocker.id, blocker.name);
-    const result = evaluateBusinessRules(modelId, dims, coordsByDimCode, f.value);
-    blocking.push(...result.blocking);
-    warnings.push(...result.warnings);
+    for (const slot of measureSlots) {
+      const val = slot === 1 ? f.value : f.values?.[slot];
+      if (val == null) continue;
+      const result = evaluateBusinessRules(modelId, dims, coordsByDimCode, val, measureCodeBySlot.get(slot));
+      blocking.push(...result.blocking);
+      warnings.push(...result.warnings);
+    }
   }
   if (blocking.length > 0) throw new BusinessRuleError(blocking);
 
   const colList = slots.map((s) => `d${s}`).join(",");
   const joinCond = slots.map((s) => `facts.d${s} = tmp_upsert_coords.d${s}`).join(" AND ");
+  const measureSelCols = measureSlots
+    .map((s) => `facts.${valueColumnForSlot(s)} AS ${valueColumnForSlot(s)}`)
+    .join(", ");
 
   const tx = sqlite.transaction(() => {
     sqlite.exec("DROP TABLE IF EXISTS temp.tmp_upsert_coords");
@@ -144,17 +208,25 @@ export function upsertFacts(
 
     const olds = sqlite
       .prepare(
-        `SELECT ${slots.map((s) => `facts.d${s} AS d${s}`).join(", ")}, facts.value AS value
+        `SELECT ${slots.map((s) => `facts.d${s} AS d${s}`).join(", ")}, ${measureSelCols}
          FROM facts JOIN tmp_upsert_coords ON ${joinCond}
          WHERE facts.model_id = ?`
       )
       .all(modelId) as Array<Record<string, unknown>>;
-    const replaced: ReplacedRow[] = olds.map((o) => ({
-      coords: slots.map((s) => String(o[`d${s}`] ?? "")),
-      value: Number(o.value),
-    }));
-    const oldByKey = new Map<string, number>();
-    for (const o of replaced) oldByKey.set(o.coords.join("\u0000"), o.value);
+    const replaced: ReplacedRow[] = olds.map((o) => {
+      const coords = slots.map((s) => String(o[`d${s}`] ?? ""));
+      const value = Number(o[valueColumnForSlot(1)]);
+      if (measureSlots.length <= 1) return { coords, value };
+      const values: Record<number, number | null> = {};
+      for (const s of measureSlots) {
+        if (s === 1) continue;
+        const raw = o[valueColumnForSlot(s)];
+        values[s] = raw == null ? null : Number(raw);
+      }
+      return { coords, value, values };
+    });
+    const oldByKey = new Map<string, ReplacedRow>();
+    for (const o of replaced) oldByKey.set(o.coords.join("\u0000"), o);
 
     sqlite
       .prepare(
@@ -164,21 +236,26 @@ export function upsertFacts(
       )
       .run(modelId);
 
-    bulkInsertFacts(modelId, colList, slots.length, rows, uploadId, now);
+    bulkInsertFacts(modelId, colList, slots.length, measureSlots, rows, uploadId, now);
 
-    logFactAuditBulk(
-      modelId,
-      uploadId,
-      slots,
-      rows.map((f) => ({
+    const auditEntries: FactAuditEntryInput[] = rows.map((f) => {
+      const old = oldByKey.get(f.coords.join("\u0000"));
+      const base: FactAuditEntryInput = {
         coords: f.coords,
-        oldValue: oldByKey.get(f.coords.join("\u0000")) ?? null,
+        oldValue: old?.value ?? null,
         newValue: f.value,
-      })),
-      "write",
-      userId,
-      now
-    );
+      };
+      if (measureSlots.length <= 1) return base;
+      const oldValues: Record<number, number | null> = {};
+      const newValues: Record<number, number | null> = {};
+      for (const s of measureSlots) {
+        if (s === 1) continue;
+        oldValues[s] = old?.values?.[s] ?? null;
+        newValues[s] = f.values?.[s] ?? null;
+      }
+      return { ...base, oldValues, newValues };
+    });
+    logFactAuditBulk(modelId, uploadId, slots, measureSlots, auditEntries, "write", userId, now);
 
     sqlite
       .prepare("UPDATE uploads SET replaced_rows = ? WHERE id = ?")
@@ -220,6 +297,9 @@ export function revertUpload(
 ) {
   const slots = dims.map((d) => d.slot);
   const colList = slots.map((s) => `d${s}`).join(",");
+  const measures = listEffectiveMeasures(modelId);
+  const measureSlots = measures.map((m) => m.slot);
+  const measureSelCols = measureSlots.map((s) => `${valueColumnForSlot(s)} AS ${valueColumnForSlot(s)}`).join(", ");
   const row = sqlite
     .prepare("SELECT replaced_rows FROM uploads WHERE id = ?")
     .get(uploadId) as { replaced_rows: string | null } | undefined;
@@ -229,13 +309,24 @@ export function revertUpload(
   const tx = sqlite.transaction(() => {
     const currentRows = sqlite
       .prepare(
-        `SELECT ${slots.map((s) => `d${s} AS d${s}`).join(", ")}, value FROM facts WHERE upload_id = ?`
+        `SELECT ${slots.map((s) => `d${s} AS d${s}`).join(", ")}, ${measureSelCols} FROM facts WHERE upload_id = ?`
       )
       .all(uploadId) as Array<Record<string, unknown>>;
-    const currentByKey = new Map<string, number>();
+    const currentByKey = new Map<string, ReplacedRow>();
     for (const r of currentRows) {
       const key = slots.map((s) => String(r[`d${s}`] ?? "")).join("\u0000");
-      currentByKey.set(key, Number(r.value));
+      const value = Number(r[valueColumnForSlot(1)]);
+      if (measureSlots.length <= 1) {
+        currentByKey.set(key, { coords: [], value });
+        continue;
+      }
+      const values: Record<number, number | null> = {};
+      for (const s of measureSlots) {
+        if (s === 1) continue;
+        const raw = r[valueColumnForSlot(s)];
+        values[s] = raw == null ? null : Number(raw);
+      }
+      currentByKey.set(key, { coords: [], value, values });
     }
     const replacedKeys = new Set(replaced.map((r) => r.coords.join("\u0000")));
 
@@ -245,28 +336,54 @@ export function revertUpload(
         modelId,
         colList,
         slots.length,
-        replaced.map((r) => ({ coords: r.coords, value: r.value })),
+        measureSlots,
+        replaced.map((r) => ({ coords: r.coords, value: r.value, values: r.values })),
         null,
         now
       );
     }
     sqlite.prepare("UPDATE uploads SET status = 'reverted' WHERE id = ?").run(uploadId);
 
-    const auditEntries: FactAuditEntryInput[] = replaced.map((r) => ({
-      coords: r.coords,
-      oldValue: currentByKey.get(r.coords.join("\u0000")) ?? null,
-      newValue: r.value,
-    }));
+    const auditEntries: FactAuditEntryInput[] = replaced.map((r) => {
+      const current = currentByKey.get(r.coords.join("\u0000"));
+      const base: FactAuditEntryInput = {
+        coords: r.coords,
+        oldValue: current?.value ?? null,
+        newValue: r.value,
+      };
+      if (measureSlots.length <= 1) return base;
+      const oldValues: Record<number, number | null> = {};
+      const newValues: Record<number, number | null> = {};
+      for (const s of measureSlots) {
+        if (s === 1) continue;
+        oldValues[s] = current?.values?.[s] ?? null;
+        newValues[s] = r.values?.[s] ?? null;
+      }
+      return { ...base, oldValues, newValues };
+    });
     for (const r of currentRows) {
       const key = slots.map((s) => String(r[`d${s}`] ?? "")).join("\u0000");
       if (replacedKeys.has(key)) continue; // yeni eklenmemis, ustune yazilmis -> yukarida ele alindi
-      auditEntries.push({
+      const current = currentByKey.get(key)!;
+      const base: FactAuditEntryInput = {
         coords: slots.map((s) => String(r[`d${s}`] ?? "")),
-        oldValue: Number(r.value),
+        oldValue: current.value,
         newValue: null,
-      });
+      };
+      if (measureSlots.length <= 1) {
+        auditEntries.push(base);
+        continue;
+      }
+      const oldValues: Record<number, number | null> = {};
+      const newValues: Record<number, number | null> = {};
+      for (const s of measureSlots) {
+        if (s === 1) continue;
+        oldValues[s] = current.values?.[s] ?? null;
+        newValues[s] = null;
+      }
+      auditEntries.push({ ...base, oldValues, newValues });
     }
-    logFactAuditBulk(modelId, null, slots, auditEntries, "revert", userId, now);
+    logFactAuditBulk(modelId, null, slots, measureSlots, auditEntries, "revert", userId, now);
   });
   tx();
   invalidateModelCache(modelId);

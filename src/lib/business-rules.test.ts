@@ -171,6 +171,47 @@ describe("evaluateBusinessRules", () => {
   });
 });
 
+describe("evaluateBusinessRules — measureCode (coklu-olcu)", () => {
+  it("measureCode belirtilmis kural sadece o olcu icin degerlendirilir", () => {
+    const rule = br.createBusinessRule({
+      tenantId: 1,
+      modelId,
+      name: "QTY negatif olamaz",
+      scopeFilters: {},
+      op: "<",
+      value: 0,
+      measureCode: "QTY",
+      severity: "block",
+    });
+    const matching = br.evaluateBusinessRules(modelId, dims, { ACC: "REVENUE", VER: "BUDGET" }, -5, "QTY");
+    expect(matching.blocking.map((v) => v.rule.id)).toContain(rule.id);
+
+    const nonMatching = br.evaluateBusinessRules(modelId, dims, { ACC: "REVENUE", VER: "BUDGET" }, -5, "AMOUNT");
+    expect(nonMatching.blocking.find((v) => v.rule.id === rule.id)).toBeUndefined();
+  });
+
+  it("measureCode belirtilmemis (null) kural HANGI olcu gonderilirse gonderilsin uygulanir", () => {
+    const rule = br.createBusinessRule({
+      tenantId: 1,
+      modelId,
+      name: "Genel negatif kural",
+      scopeFilters: { ACC: ["OPEX"] },
+      op: "<",
+      value: 0,
+      severity: "warn",
+    });
+    const resultAmount = br.evaluateBusinessRules(modelId, dims, { ACC: "OPEX", VER: "BUDGET" }, -1, "AMOUNT");
+    const resultQty = br.evaluateBusinessRules(modelId, dims, { ACC: "OPEX", VER: "BUDGET" }, -1, "QTY");
+    expect(resultAmount.warnings.map((v) => v.rule.id)).toContain(rule.id);
+    expect(resultQty.warnings.map((v) => v.rule.id)).toContain(rule.id);
+  });
+
+  it("measureCode parametresi hic verilmezse (tek-olcu cagri) geriye uyumlu calisir", () => {
+    const result = br.evaluateBusinessRules(modelId, dims, { ACC: "OPEX", VER: "BUDGET" }, -1);
+    expect(result.warnings.some((v) => v.rule.name === "Genel negatif kural")).toBe(true);
+  });
+});
+
 describe("BusinessRuleError", () => {
   it("ihlal mesajlarini birlestirir", () => {
     const rule = br.createBusinessRule({

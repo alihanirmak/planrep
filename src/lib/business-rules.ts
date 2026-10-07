@@ -13,6 +13,10 @@ export type BusinessRule = {
   scopeFilters: Record<string, string[]>;
   op: RuleOp;
   value: number;
+  // null = modelin TUM olculerine uygulanir (geriye uyumlu, var olan hicbir
+  // kuralda bu kolon doldurulmamistir). Dolu ise sadece o measure code'una
+  // ait yazimlar icin degerlendirilir (bkz. evaluateBusinessRules).
+  measureCode: string | null;
   severity: RuleSeverity;
   message: string | null;
   active: boolean;
@@ -28,6 +32,7 @@ type Row = {
   scope_filters: string;
   op: RuleOp;
   value: number;
+  measure_code: string | null;
   severity: RuleSeverity;
   message: string | null;
   active: number;
@@ -44,6 +49,7 @@ function mapRow(r: Row): BusinessRule {
     scopeFilters: JSON.parse(r.scope_filters),
     op: r.op,
     value: r.value,
+    measureCode: r.measure_code,
     severity: r.severity,
     message: r.message,
     active: r.active === 1,
@@ -84,6 +90,7 @@ export function createBusinessRule(input: {
   scopeFilters: Record<string, string[]>;
   op: RuleOp;
   value: number;
+  measureCode?: string | null;
   severity: RuleSeverity;
   message?: string | null;
 }): BusinessRule {
@@ -92,8 +99,8 @@ export function createBusinessRule(input: {
     sqlite
       .prepare(
         `INSERT INTO business_rules
-           (tenant_id, model_id, name, scope_filters, op, value, severity, message, active, created_at, updated_at)
-         VALUES (?,?,?,?,?,?,?,?,1,?,?)`
+           (tenant_id, model_id, name, scope_filters, op, value, measure_code, severity, message, active, created_at, updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,1,?,?)`
       )
       .run(
         input.tenantId,
@@ -102,6 +109,7 @@ export function createBusinessRule(input: {
         JSON.stringify(input.scopeFilters),
         input.op,
         input.value,
+        input.measureCode ?? null,
         input.severity,
         input.message ?? null,
         now,
@@ -118,6 +126,7 @@ export function updateBusinessRule(
     scopeFilters: Record<string, string[]>;
     op: RuleOp;
     value: number;
+    measureCode: string | null;
     severity: RuleSeverity;
     message: string | null;
     active: boolean;
@@ -131,6 +140,7 @@ export function updateBusinessRule(
          scope_filters = COALESCE(?, scope_filters),
          op = COALESCE(?, op),
          value = COALESCE(?, value),
+         measure_code = CASE WHEN ? THEN ? ELSE measure_code END,
          severity = COALESCE(?, severity),
          message = CASE WHEN ? THEN ? ELSE message END,
          active = COALESCE(?, active),
@@ -142,6 +152,8 @@ export function updateBusinessRule(
       patch.scopeFilters != null ? JSON.stringify(patch.scopeFilters) : null,
       patch.op ?? null,
       patch.value ?? null,
+      patch.measureCode !== undefined ? 1 : 0,
+      patch.measureCode ?? null,
       patch.severity ?? null,
       patch.message !== undefined ? 1 : 0,
       patch.message ?? null,
@@ -178,16 +190,22 @@ export type RuleViolation = { rule: BusinessRule; value: number };
 // Bir koordinat+deger icin aktif is kurallarini degerlendirir. "block"
 // siddetindeki ihlaller yazmayi durdurmali (caller BusinessRuleError
 // firlatmali); "warn" siddetindekiler sadece bilgilendirme amaclidir.
+// measureCode: hangi olcunun degerlendirildigi (coklu-olcu modeller icin;
+// tek-olcu modellerde atlanabilir). rule.measureCode==null olan kurallar
+// HER olcuye uygulanir (geriye uyumlu — var olan tum kurallarda bu kolon
+// bos), rule.measureCode doluysa sadece esit olcu icin degerlendirilir.
 export function evaluateBusinessRules(
   modelId: number,
   dims: DimInfo[],
   coordsByDimCode: Record<string, string | undefined>,
-  value: number
+  value: number,
+  measureCode?: string
 ): { blocking: RuleViolation[]; warnings: RuleViolation[] } {
   const rules = listBusinessRules({ modelId, activeOnly: true });
   const blocking: RuleViolation[] = [];
   const warnings: RuleViolation[] = [];
   for (const rule of rules) {
+    if (rule.measureCode != null && rule.measureCode !== measureCode) continue;
     if (!scopeMatchesCoord(rule.scopeFilters, dims, coordsByDimCode)) continue;
     if (!ruleViolated(rule.op, value, rule.value)) continue;
     (rule.severity === "block" ? blocking : warnings).push({ rule, value });
