@@ -25,6 +25,7 @@ export default function UsersPage() {
   const [rows, setRows] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reloginNotice, setReloginNotice] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -79,6 +80,15 @@ export default function UsersPage() {
     }
   }
 
+  // Rol ve aiDevAccess, oturum acilirken JWT icine GOMULUR (bkz.
+  // lib/session.ts createSessionToken) — mevcut bir oturum, DB'deki
+  // degisiklikten BAGIMSIZ olarak eski (bayat) degeri tasimaya devam
+  // eder (JWT 12 saat gecerli, sunucu tarafinda bir "oturumu zorla
+  // yenile" mekanizmasi yok). Bu yuzden kullaniciya SIK SORULAN "neden
+  // hemen gorunmuyor" sorusunu onlemek icin acik bir uyari gosteriliyor
+  // — gercek yetki (DB) her zaman dogru/guncel, SADECE o kullanicinin
+  // ekranindaki goruntu (sidebar linki vb.) yeniden giris yapana kadar
+  // eski kalabilir.
   async function changeRole(id: number, role: UserRow["role"]) {
     const res = await fetch(`/api/users/${id}`, {
       method: "PATCH",
@@ -88,6 +98,11 @@ export default function UsersPage() {
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       setError(body.error === "last_admin" ? "Son yönetici düşürülemez" : t("common.error"));
+    } else {
+      setError(null);
+      setReloginNotice(
+        "Rol değişikliği kaydedildi — kullanıcının menü/erişim görünümünde yansıması için çıkış yapıp yeniden giriş yapması gerekir (oturum bilgisi en fazla 12 saat sonra da kendiliğinden güncellenir)."
+      );
     }
     load();
   }
@@ -98,7 +113,16 @@ export default function UsersPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ aiDevAccess }),
     });
-    if (!res.ok) setError(t("common.error"));
+    if (!res.ok) {
+      setError(t("common.error"));
+    } else {
+      setError(null);
+      setReloginNotice(
+        aiDevAccess
+          ? "AI ile Geliştirme erişimi açıldı — kullanıcının menüde \"🤖 AI ile Geliştir\" linkini görmesi için çıkış yapıp yeniden giriş yapması gerekir (oturum bilgisi en fazla 12 saat sonra da kendiliğinden güncellenir). Not: yazma uçları her durumda erişimi canlı/anlık kontrol eder — bu uyarı sadece menü görünürlüğü içindir."
+          : "AI ile Geliştirme erişimi kapatıldı — bu HEMEN etkilidir (API uçları canlı kontrol yapar), ancak kullanıcının menüsündeki link çıkış/giriş yapana kadar görünmeye devam edebilir."
+      );
+    }
     load();
   }
 
@@ -122,6 +146,20 @@ export default function UsersPage() {
           🔐 {t("nav.access")} →
         </a>
       </div>
+
+      {reloginNotice && (
+        <div className="mt-4 flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-800">
+          <span>⚠️</span>
+          <span className="flex-1">{reloginNotice}</span>
+          <button
+            onClick={() => setReloginNotice(null)}
+            className="shrink-0 text-amber-500 hover:text-amber-700"
+            aria-label="Kapat"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       <div className="mt-6 rounded-xl bg-white p-5 shadow-sm">
         <h2 className="mb-4 text-sm font-semibold text-slate-600">{t("users.new")}</h2>

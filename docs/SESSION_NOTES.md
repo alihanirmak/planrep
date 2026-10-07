@@ -868,3 +868,43 @@ Tamamlanan Faz 3 maddeleri (hepsi ayrı commit):
 - `docs/ROADMAP.md`'deki "AI ile Geliştirme" bölümüne bu özellik
   "Görsel ayırıcı" alt-maddesi olarak eklendi.
 - **Henüz commit edilmedi** — sıradaki adım commit+push.
+
+## 2026-10-07 — Oturum (JWT) bayatlama uyarısı /admin/users'a eklendi
+
+- Kullanıcı bir kullanıcıya `aiDevAccess` açtığını ama Sidebar'da "AI ile
+  Geliştir" linkinin görünmediğini bildirdi. Kod incelemesiyle kök neden
+  teşhis edildi: `role`/`aiDevAccess` oturum JWT'sine SADECE login anında
+  gömülüyor (`lib/session.ts` `createSessionToken`), admin DB'yi
+  güncelleyince mevcut (zaten açık) oturum bunu YANSITMIYOR — JWT 12 saat
+  geçerli, sunucu tarafında zorla yenileme mekanizması yok. Bu, `role`
+  değişikliğinde de ZATEN var olan bir kısıtlamaydı (yeni bir hata değil,
+  önceki oturumda da fark edilmemişti), kullanıcıya bunu açıkladım.
+- Kullanıcı "uyarı mutlaka gösterelim" dedi — kod hatası yok, sadece UX
+  iyileştirmesi gerekiyordu.
+- **Keşif:** `/admin/users/page.tsx`'te zaten `const [reloginNotice,
+  setReloginNotice] = useState<string | null>(null)` tanımlıydı ama
+  HİÇBİR YERDE kullanılmıyordu — önceki bir oturumdan kalma "ölü" kod
+  (muhtemelen bu özellik planlanmış ama bağlanmamıştı). Yeni bir state
+  eklemek yerine bu var olanı bağladım.
+- **Değişiklik:** `changeRole`/`toggleAiDevAccess` başarılı PATCH
+  sonrası `setReloginNotice(...)` çağırıyor artık — "etkilenen kullanıcı
+  çıkış yapıp yeniden giriş yapmalı (veya en fazla 12 saat beklemeli)"
+  net bir mesajla. `aiDevAccess` KAPATILIRKEN ayrıca "yazma uçları zaten
+  canlı/anlık kontrol eder, bu uyarı sadece menü görünürlüğü içindir"
+  notu eklendi — çünkü `hasLiveAiDevAccess` (önceki oturumda yazılan
+  savunma katmanı) DB'den canlı okuduğundan erişimi KAPATMAK gerçekten
+  anında etkilidir, sadece AÇMAK/rol YÜKSELTMEK görsel olarak (sidebar
+  linki) gecikir — bu asimetriyi kullanıcıya açıkça anlattım, yanlış
+  güven vermemek için (sanki her iki yönde de aynı gecikme varmış gibi
+  düşünülmesin).
+- Sayfanın üstüne, kapatılabilir (✕ butonlu) sarı bir banner eklendi
+  (hata banner'ıyla AYNI görsel desen, farklı renk — amber/sarı "uyarı",
+  kırmızı "hata" ile karışmasın).
+- Kod/DB tarafında HİÇBİR değişiklik yok (DB zaten doğru/güncel) — saf
+  UI metni + ölü state'in bağlanması. `tsc --noEmit` temiz, `eslint` 0
+  hata (1 önceden var olan ilişkisiz uyarı), `next build` başarılı.
+  Test sayısı **380'de sabit** (bu değişiklik test edilebilir bir
+  mantık içermiyor, sadece statik metin/koşullu render).
+- `docs/ROADMAP.md`'deki "AI ile Geliştirme" bölümüne bu düzeltme
+  "Oturum (JWT) bayatlama uyarısı" alt-maddesi olarak eklendi.
+- **Henüz commit edilmedi** — sıradaki adım commit+push.
