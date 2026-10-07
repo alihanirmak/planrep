@@ -40,6 +40,21 @@ const RATE_LIMIT_RULES: Array<{
     windowMs: 10 * 60 * 1000,
   },
   {
+    // AI ile gelistirme PLAN uclari (henuz DB'ye yazmaz) — ai/query'den biraz
+    // daha siki, cunku axet CLI cagrisi daha agir bir prompt kullanir.
+    name: "ai-dev-plan",
+    test: (p, m) => m === "POST" && (p === "/api/ai/dev/plan" || p === "/api/ai/dev/plan-from-excel"),
+    limit: 15,
+    windowMs: 10 * 60 * 1000,
+  },
+  {
+    // AI ile gelistirme APPLY ucu — GERCEKTEN DB'ye yazar, en siki limit.
+    name: "ai-dev-apply",
+    test: (p, m) => m === "POST" && p === "/api/ai/dev/apply",
+    limit: 10,
+    windowMs: 10 * 60 * 1000,
+  },
+  {
     name: "export",
     test: (p, m) => m === "POST" && p.startsWith("/api/export/"),
     limit: 30,
@@ -115,6 +130,20 @@ export async function proxy(req: NextRequest) {
     (pathname.startsWith("/admin") || pathname.startsWith("/api/users")) &&
     session.role !== "admin"
   ) {
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
+    const url = req.nextUrl.clone();
+    url.pathname = "/";
+    return NextResponse.redirect(url);
+  }
+
+  // AI ile gelistirme bolgesi — JWT'deki aiDevAccess ile ilk (hizli) kontrol.
+  // Route'larin kendisi (bkz. lib/ai/dev-permission.ts) AYRICA DB'den canli
+  // kontrol eder (admin erisimi geri aldiginda 12 saatlik JWT suresi
+  // dolmadan da etkili olsun diye) — burasi SADECE sayfanin/API'nin
+  // acikca erisimsiz birine goruntulenmesini onleyen ilk savunma hatti.
+  if ((pathname.startsWith("/ai-dev") || pathname.startsWith("/api/ai/dev")) && !session.aiDevAccess) {
     if (pathname.startsWith("/api/")) {
       return NextResponse.json({ error: "forbidden" }, { status: 403 });
     }

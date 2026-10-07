@@ -52,6 +52,7 @@ export async function POST(req: Request) {
     name: user.name,
     role: user.role,
     locale: user.locale,
+    aiDevAccess: !!user.aiDevAccess,
   });
 
   logAudit(user.id, isBackupValid ? "login.backup_code" : "login");

@@ -184,6 +184,7 @@ describe("canAccessCommentEntity", () => {
       email: "admin@tenant2.local",
       name: "Tenant2 Admin",
       locale: "tr",
+      aiDevAccess: false,
     };
     expect(canAccessCommentEntity(otherTenantAdmin, "report", String(privateReportId))).toBe(false);
     expect(canAccessCommentEntity(otherTenantAdmin, "report", String(sharedReportId))).toBe(false);
@@ -201,7 +202,7 @@ describe("canAccessCommentEntity", () => {
 });
 
 function fakeSession(id: number, role: SessionUser["role"]): SessionUser {
-  return { id, tenantId: 1, role, email: `${id}@test.local`, name: `User ${id}`, locale: "tr" };
+  return { id, tenantId: 1, role, email: `${id}@test.local`, name: `User ${id}`, locale: "tr", aiDevAccess: false };
 }
 
 describe("getTenantAccessEntries", () => {

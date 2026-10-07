@@ -11,13 +11,14 @@ import NotificationBell from "./NotificationBell";
 import CommandPalette from "./CommandPalette";
 import ShortcutsHelpModal from "./ShortcutsHelpModal";
 
-const NAV: Array<{ href: string; key: TKey; icon: string; adminOnly?: boolean }> = [
+const NAV: Array<{ href: string; key: TKey; icon: string; adminOnly?: boolean; aiDevOnly?: boolean }> = [
   { href: "/", key: "nav.home", icon: "🏠" },
   { href: "/reports", key: "nav.reports", icon: "📊" },
   { href: "/dashboards", key: "nav.dashboards", icon: "📈" },
   { href: "/workflow", key: "nav.workflow", icon: "✅" },
   { href: "/scenarios", key: "nav.scenarios", icon: "🔀" },
   { href: "/ai", key: "nav.ai", icon: "✨" },
+  { href: "/ai-dev", key: "nav.aiDev", icon: "🤖", aiDevOnly: true },
   { href: "/modeling", key: "nav.modeling", icon: "🧊" },
   { href: "/browser", key: "nav.browser", icon: "🔎" },
   { href: "/upload", key: "nav.upload", icon: "📤" },
@@ -61,12 +62,12 @@ export default function Sidebar({
 
   const paletteItems = useMemo(
     () =>
-      NAV.filter((n) => !n.adminOnly || user.role === "admin").map((n) => ({
+      NAV.filter((n) => (!n.adminOnly || user.role === "admin") && (!n.aiDevOnly || user.aiDevAccess)).map((n) => ({
         href: n.href,
         label: t(n.key),
         icon: n.icon,
       })),
-    [t, user.role]
+    [t, user.role, user.aiDevAccess]
   );
 
   function switchLocale(next: Locale) {
@@ -138,7 +139,7 @@ export default function Sidebar({
           </button>
         </div>
         <nav className="flex-1 space-y-1 px-3">
-          {NAV.filter((n) => !n.adminOnly || user.role === "admin").map((n) => {
+          {NAV.filter((n) => (!n.adminOnly || user.role === "admin") && (!n.aiDevOnly || user.aiDevAccess)).map((n) => {
             const active =
               n.href === "/" ? pathname === "/" : pathname.startsWith(n.href);
             return (

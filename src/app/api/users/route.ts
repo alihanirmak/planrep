@@ -18,11 +18,12 @@ export async function GET() {
       role: users.role,
       locale: users.locale,
       createdAt: users.createdAt,
+      aiDevAccess: users.aiDevAccess,
     })
     .from(users)
     .where(eq(users.tenantId, session.tenantId))
     .all();
-  return NextResponse.json(rows);
+  return NextResponse.json(rows.map((r) => ({ ...r, aiDevAccess: !!r.aiDevAccess })));
 }
 
 const createSchema = z.object({

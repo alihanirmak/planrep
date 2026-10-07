@@ -47,6 +47,9 @@ export type SessionUser = {
   name: string;
   role: Role;
   locale: string;
+  // bkz. lib/db/schema.ts users.aiDevAccess yorumu — rolden bagimsiz,
+  // admin tarafindan acilip kapatilan "AI ile Gelistirme" erisim bayragi.
+  aiDevAccess: boolean;
 };
 
 export async function createSessionToken(user: SessionUser): Promise<string> {

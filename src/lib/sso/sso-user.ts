@@ -13,6 +13,7 @@ export type SsoLoginResult = {
   name: string;
   role: "admin" | "planner" | "viewer";
   locale: string;
+  aiDevAccess: boolean;
 };
 
 // Akis: 1) ssoProvider+ssoSubject ile ESLESEN bir kullanici var mi? varsa
@@ -78,6 +79,7 @@ function toResult(user: {
   name: string;
   role: "admin" | "planner" | "viewer";
   locale: string;
+  aiDevAccess: boolean | number;
 }): SsoLoginResult {
   return {
     id: user.id,
@@ -86,5 +88,6 @@ function toResult(user: {
     name: user.name,
     role: user.role,
     locale: user.locale,
+    aiDevAccess: !!user.aiDevAccess,
   };
 }

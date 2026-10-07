@@ -610,3 +610,110 @@ Tamamlanan Faz 3 maddeleri (hepsi ayrı commit):
 - `docs/ROADMAP.md`'deki "çoklu-model join" backlog maddesi TAMAMLANDI
   olarak güncellendi (kapsam/mimari karar + API/UI özeti ile).
 - **Henüz commit edilmedi** — sıradaki adım commit+push.
+
+## 2026-10-07 — AI ile Geliştirme (chat/Excel ile model/boyut/ölçü/rapor oluşturma) TAMAMLANDI
+
+- Kullanıcı yeni bir özellik istedi: ürün içinden AI ile konuşarak (veya
+  Excel şablonu vererek) model/boyut/rapor geliştirme — ama yetkisine göre
+  değişmeli, "ai developer" yetkisi rolden ayrı olmalı, ve AI'nın yapacağı
+  değişiklikler ürünü bozacak şekilde LİMİTSİZ olmamalı. Koda hiç dokunmadan
+  önce 4 `ask_user` sorusuyla (izin modeli, güvenlik modeli, onay akışı,
+  Excel kapsamı) tasarım netleştirildi — kullanıcı hepsinde "Recommended"
+  seçeneği onayladı: ayrı izin bayrağı, sabit eylem listesi (tool-calling),
+  önce-plan-sonra-onay, Excel'de yapı+veri birlikte.
+- **İzin:** `users.aiDevAccess` (boolean) eklendi — rolden TAMAMEN BAĞIMSIZ,
+  sadece admin `/admin/users`'tan açar/kapatır (role select'in YANINA, AYNI
+  inline-PATCH deseniyle bir checkbox). Bu alan `SessionUser`/JWT'ye de
+  eklenmesi gerektiğinden (nav linkinin görünürlüğü için), oturum oluşturan
+  TÜM yollar (login, TOTP-login, signup, SSO — `sso-user.ts` `toResult`)
+  güncellendi; mevcut testlerdeki (`access.test.ts`) elle inşa edilmiş
+  `SessionUser` nesneleri de yeni zorunlu alanı almak için düzeltildi.
+  **Savunma katmanı:** JWT'deki bu bayrak role ile AYNI 12 saatlik
+  bayatlama riskini taşır (kabul edilebilir, mevcut role davranışıyla
+  tutarlı) ama YAZMA yapan uçlarda (`plan`/`plan-from-excel`/`apply`)
+  `lib/ai/dev-permission.ts` `hasLiveAiDevAccess()` ile EK OLARAK DB'den
+  canlı kontrol ediliyor — admin erişimi geri aldığında aninda etkili
+  olsun diye (bu özellik gerçekten veri/model oluşturabildiğinden, role
+  için kabul edilen gecikmeyi burada kabul etmek istemedik).
+- **Güvenlik çekirdeği (asıl kritik tasarım kararı) — `lib/ai/dev-actions.ts`:**
+  AI'nın yapabileceği HER ŞEY, zod `discriminatedUnion` ile tanımlı 5 sabit
+  eylem türüyle (`create_dimension`, `create_model`, `create_measure`,
+  `create_report`, `upload_facts`) SINIRLANDI — serbest kod/SQL/shell
+  çalıştırma mekanizması YOK (böyle bir eylem türü hiç tanımlı değil, LLM
+  ne isterse istesin zod bunu reddeder). Her eylem, karşılık geldiği REST
+  route'un (`/api/models`, `/api/dimensions`, `/api/models/[id]/measures`,
+  `/api/reports`, `/api/upload`) AYNI limit/kod-regex/rol kontrolünü
+  (`MAX_MODEL_DIMENSIONS`, `MAX_MODEL_MEASURES`, `viewer` rolü hiçbir yazma
+  eylemini yapamaz) kendi içinde yeniden uyguluyor — bu route'lar Next.js
+  handler'ları olduğundan (Request/Response'a bağlı) doğrudan çağrılamadı,
+  AYNI mantık (kasıtlı olarak) paralel fonksiyonlar olarak yeniden yazıldı.
+  İş kuralları (business_rules), kullanıcı/rol yönetimi, connector/
+  scheduled-sync, model/boyut SİLME eylemleri KASITLI OLARAK listeye
+  EKLENMEDİ — kullanıcının "iş kurallarını da dahil et" seçeneği ask_user'da
+  SUNULDU ama kullanıcı "Recommended" (kapsam dışı) seçeneğini onayladı.
+- **`runPlan(plan, ctx, dryRun)` — tek fonksiyon, iki mod:** `dryRun=true`
+  (önizleme, HİÇBİR SQL YAZMA işlemi) ve `dryRun=false` (gerçek uygulama)
+  AYNI kod yolunu kullanır — bu, "önizlemede güvenli görünüp uygulamada
+  farklı davranma" riskini mimari olarak ortadan kaldırır (iki ayrı
+  fonksiyon yazılsaydı ikisi arasında sapma riski olurdu). Plandaki
+  eylemler arası referanslar (örn. "önce DIM oluştur, sonra o DIM'i
+  kullanan MODEL oluştur") `knownDims`/`knownModels` map'leriyle AYNI
+  çalıştırma içinde çözülüyor — dryRun'da henüz commit edilmemiş
+  varlıklara negatif "sahte id" atanıyor ki sonraki adımlar referans
+  verebilsin, gerçek uygulamada bu id'ler gerçek INSERT'lerden geliyor.
+- **NL → plan (`lib/ai/dev-planner.ts`):** axet-code CLI'nin spawn/timeout
+  mantığı `/api/ai/query/route.ts`'ten `lib/ai/axet-cli.ts`'e ÇIKARILDI
+  (davranış DEĞİŞMEDİ — pür refactor, mevcut route bu yeni modülü
+  kullanacak şekilde güncellendi, tüm 347 test refactor sonrası da
+  yeşildi) — bu sayede yeni dev-planner AYNI axet entegrasyonunu
+  tekrarlamadan kullanabildi. axet'in döndürdüğü JSON `devPlanSchema` ile
+  DOĞRULANIYOR (şemaya uymayan hiçbir şey kabul edilmiyor — "iyi niyetle
+  tahmin" YOK). Yedek yol (axet yoksa): `nl2report.ts`'teki `ruleFallback`
+  pragmatizmiyle AYNI ruhta, SADECE basit yapılandırılmış komut satırları
+  (`MODEL KOD "Ad" DIMS=...`, `BOYUT ... TIP=... UYELER=...`, `OLCU`,
+  `RAPOR`) ayrıştırılıyor — tam NLU değil, kullanıcının yazabileceği açık
+  bir sözdizimi (UI'da örnek olarak gösteriliyor).
+- **Excel → plan (`lib/ai/dev-excel.ts`):** LLM gerektirmeyen, deterministik
+  bir ayrıştırma. **Bulunan ve düzeltilen bir hata:** ilk yazımda kolon
+  tipini (boyut mu ölçü mü) belirlemek için mevcut `parseLocaleNumber`
+  (locale-duyarlı sayı ayrıştırıcı) kullanılmıştı — ama bu fonksiyon
+  KASITLI OLARAK permissive (TR/EN binlik/ondalık ayırıcılarını kabul
+  etmek için `-` dahil tüm harf-olmayan karakterleri temizliyor), bu
+  yüzden "2026-01" gibi bir ZAMAN kodu "202601" olarak sayı sanılıp
+  yanlışlıkla ÖLÇÜ kolonuna sınıflandırıldı (testler bunu yakaladı — 4/5
+  test ilk denemede FAILED). Düzeltme: sınıflandırma için AYRI, KATI bir
+  regex (`/^-?\d+([.,]\d+)?$/`) eklendi — `parseLocaleNumber` sadece
+  "zaten ölçü olduğu belirlenmiş" bir kolonun GERÇEK değerini okurken
+  kullanılıyor, sınıflandırma kararını ASLA vermiyor. `modelCode` ipucu
+  verilip o kodla bir model VARSA, modelin mevcut boyut/ölçüleri (başlık
+  adı/kod eşleşmesiyle) yeniden kullanılıyor — sadece eşleşmeyen başlıklar
+  için yeni boyut/ölçü öneriliyor (ayrı bir test senaryosuyla doğrulandı).
+- **API + rate limit:** `/api/ai/dev/plan` (sohbet), `/api/ai/dev/plan-from-excel`
+  (multipart), `/api/ai/dev/apply` — üçü `hasLiveAiDevAccess` kontrolünden
+  geçiyor; `apply` ayrıca tenant başına günlük eylem tavanı uyguluyor
+  (`MAX_AI_DEV_ACTIONS_PER_DAY=100`, `audit_log`'daki `ai_dev.*` kayıtları
+  sayılarak). `proxy.ts`'e `/ai-dev`+`/api/ai/dev` için JWT-tabanlı erken
+  kontrol (admin bölgesiyle AYNI desen) + `ai/query`'den daha sıkı 2 yeni
+  rate-limit kuralı (`ai-dev-plan` 15/10dk, `ai-dev-apply` 10/10dk) eklendi.
+- **UI:** Yeni `/ai-dev` sayfası — sohbet kutusu + örnek komutlar, Excel
+  yükleme formu (model kodu/adı ipucu alanlarıyla), plan önizlemesi
+  (eylem başına durum rozeti) + "✅ Uygula" onay butonu + uygulama sonucu
+  listesi. Sidebar'a `aiDevAccess`'e göre gösterilen "🤖 AI ile Geliştir"
+  linki (`adminOnly`'nin YANINA `aiDevOnly` flag'i, AYNI filtre deseni).
+- 18 yeni test: `dev-actions.test.ts` (13 — dryRun'da hiçbir yazma
+  olmaması, apply'da gerçek yazma, rol/limit kontrolleri, aynı plan içi
+  çapraz referans, idempotent "exists" davranışı) + `dev-excel.test.ts`
+  (5 — yeni model senaryosu, boş/eksik dosya hataları, mevcut modele
+  eşleşen/eşleşmeyen başlık senaryoları) — toplam **365 test**. Lint 0
+  hata (1 önceden var olan ilişkisiz uyarı), typecheck temiz, `next build`
+  başarılı (65 route, 3 önceden var olan ilişkisiz "dynamic filesystem
+  access" uyarısı — biri yeni `axet-cli.ts` için de görünüyor ama bu
+  zaten `ai/query/route.ts`'in ÖNCEDEN de taşıdığı, pür refactor'la
+  taşınmış bir uyarı). Gerçek dev DB'de migration doğrulandı
+  (`users.ai_dev_access` kolonu mevcut) — gerçek veriyi kirletme riskini
+  önlemek için KASITLI OLARAK manuel smoke test yapılmadı, güven tamamen
+  izole test DB'leri kullanan 18 yeni + mevcut 347 testin tamamına
+  (365/365 yeşil) dayanıyor.
+- `docs/ROADMAP.md`'ye yeni "Faz 4 — AI ile Geliştirme" bölümü eklendi
+  (TAMAMLANDI, detaylı mimari/güvenlik özetiyle).
+- **Henüz commit edilmedi** — sıradaki adım commit+push.

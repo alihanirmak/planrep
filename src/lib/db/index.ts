@@ -303,6 +303,7 @@ for (const migration of [
   "ALTER TABLE users ADD COLUMN totp_secret TEXT",
   "ALTER TABLE users ADD COLUMN totp_enabled INTEGER NOT NULL DEFAULT 0",
   "ALTER TABLE users ADD COLUMN totp_backup_codes TEXT",
+  "ALTER TABLE users ADD COLUMN ai_dev_access INTEGER NOT NULL DEFAULT 0",
   "ALTER TABLE users ADD COLUMN sso_provider TEXT",
   "ALTER TABLE users ADD COLUMN sso_subject TEXT",
   "ALTER TABLE users ADD COLUMN auth_provider TEXT NOT NULL DEFAULT 'local'",

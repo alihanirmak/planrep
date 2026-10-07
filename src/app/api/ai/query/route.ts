@@ -1,49 +1,14 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { spawn } from "node:child_process";
-import fs from "node:fs";
 import { getSession } from "@/lib/auth";
 import { getModels } from "@/lib/model";
 import { buildPrompt, extractJson, toDef, ruleFallback } from "@/lib/ai/nl2report";
+import { runAxet, axetAvailable } from "@/lib/ai/axet-cli";
 import { logAudit } from "@/lib/audit";
 import { formatT } from "@/lib/i18n";
 import { getServerT } from "@/lib/i18n-server";
 
 const schema = z.object({ question: z.string().min(3).max(500) });
-
-const AXET_BIN =
-  process.env.AXET_CODE_BIN ??
-  `${process.env.LOCALAPPDATA ?? ""}\\axet-code\\bin\\axet-code.exe`;
-
-// Uzun prompt stdin uzerinden verilir (arguman uzunluk sinirina takilmasin)
-function runAxet(prompt: string, t: (key: import("@/lib/i18n").TKey) => string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(
-      AXET_BIN,
-      ["run", "--quiet", "stdin'deki görevi uygula ve SADECE istenen JSON'u döndür"],
-      { windowsHide: true }
-    );
-    let stdout = "";
-    let stderr = "";
-    const timer = setTimeout(() => {
-      child.kill();
-      reject(new Error(t("err.axetTimeout")));
-    }, 90000);
-    child.stdout.on("data", (d) => (stdout += String(d)));
-    child.stderr.on("data", (d) => (stderr += String(d)));
-    child.on("error", (e) => {
-      clearTimeout(timer);
-      reject(e);
-    });
-    child.on("close", (code) => {
-      clearTimeout(timer);
-      if (code === 0) resolve(stdout);
-      else reject(new Error(stderr.slice(0, 400) || formatT(t("err.axetExitCode"), { code: String(code) })));
-    });
-    child.stdin.write(prompt, "utf8");
-    child.stdin.end();
-  });
-}
 
 export async function POST(req: Request) {
   const session = await getSession();
@@ -61,7 +26,7 @@ export async function POST(req: Request) {
   let note: string | null = null;
   let def = null as ReturnType<typeof toDef> | null;
 
-  if (fs.existsSync(AXET_BIN) && process.env.AXET_DISABLE !== "1") {
+  if (axetAvailable()) {
     try {
       const output = await runAxet(buildPrompt(question, models), t);
       const json = extractJson(output);

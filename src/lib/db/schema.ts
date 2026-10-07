@@ -77,6 +77,13 @@ export const users = sqliteTable("users", {
   authProvider: text("auth_provider", { enum: ["local", "sso"] })
     .notNull()
     .default("local"),
+  // AI ile geliştirme (chat ile model/boyut/ölçü/rapor oluşturma, Excel
+  // şablonundan yapı+veri çıkarma) özelliğine erişim — rolden BAĞIMSIZ,
+  // sadece admin tarafından açılıp kapatılan ayrı bir izin bayrağı (bkz.
+  // lib/ai/dev-actions.ts). Rol zaten her eylemin KENDİ yetki kontrolünü
+  // yapar (viewer hiçbir zaman yazamaz); bu bayrak SADECE bu sohbet
+  // arayüzüne erişimi açar/kapatır, rolün verdiği yetkiyi GENİŞLETMEZ.
+  aiDevAccess: integer("ai_dev_access").notNull().default(0),
 });
 
 export const dimensions = sqliteTable("dimensions", {

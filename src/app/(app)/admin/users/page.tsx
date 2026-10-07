@@ -11,6 +11,7 @@ type UserRow = {
   name: string;
   role: "admin" | "planner" | "viewer";
   createdAt: string;
+  aiDevAccess: boolean;
 };
 
 type Dim = { id: number; code: string; name: string; members: Member[] };
@@ -88,6 +89,16 @@ export default function UsersPage() {
       const body = await res.json().catch(() => ({}));
       setError(body.error === "last_admin" ? "Son yönetici düşürülemez" : t("common.error"));
     }
+    load();
+  }
+
+  async function toggleAiDevAccess(id: number, aiDevAccess: boolean) {
+    const res = await fetch(`/api/users/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ aiDevAccess }),
+    });
+    if (!res.ok) setError(t("common.error"));
     load();
   }
 
@@ -179,6 +190,7 @@ export default function UsersPage() {
                 <th className="px-5 py-3">{t("users.name")}</th>
                 <th className="px-5 py-3">{t("users.email")}</th>
                 <th className="px-5 py-3">{t("users.role")}</th>
+                <th className="px-5 py-3">🤖 AI ile Geliştirme</th>
                 <th className="px-5 py-3">{t("users.createdAt")}</th>
                 <th className="px-5 py-3"></th>
               </tr>
@@ -198,6 +210,15 @@ export default function UsersPage() {
                       <option value="planner">{t("role.planner")}</option>
                       <option value="viewer">{t("role.viewer")}</option>
                     </select>
+                  </td>
+                  <td className="px-5 py-3">
+                    <input
+                      type="checkbox"
+                      checked={u.aiDevAccess}
+                      onChange={(e) => toggleAiDevAccess(u.id, e.target.checked)}
+                      className="h-4 w-4 cursor-pointer accent-blue-600"
+                      title="AI ile model/boyut/rapor oluşturma sohbetine erişim"
+                    />
                   </td>
                   <td className="px-5 py-3 text-xs text-slate-400">
                     {new Date(u.createdAt).toLocaleDateString()}

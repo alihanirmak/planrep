@@ -22,6 +22,8 @@ const patchSchema = z.object({
   // zorla kapatabilir (kurtarma yolu — bkz. account/security sayfasindaki
   // self-service disable, o normal akis icin sifre ister).
   disableTotp: z.literal(true).optional(),
+  // bkz. lib/db/schema.ts users.aiDevAccess yorumu.
+  aiDevAccess: z.boolean().optional(),
 });
 
 export async function PATCH(
@@ -44,7 +46,7 @@ export async function PATCH(
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  const { name, role, password, locale, disableTotp } = parsed.data;
+  const { name, role, password, locale, disableTotp, aiDevAccess } = parsed.data;
 
   // Son admin'in rolu dusurulemez — TOCTOU'yu engellemek icin kontrol ve
   // guncelleme ayni senkron transaction icinde (await yok, yarisma riski yok).
@@ -59,6 +61,7 @@ export async function PATCH(
         ...(locale ? { locale } : {}),
         ...(password ? { passwordHash: hashPassword(password) } : {}),
         ...(disableTotp ? { totpEnabled: 0, totpSecret: null, totpBackupCodes: null } : {}),
+        ...(aiDevAccess !== undefined ? { aiDevAccess: aiDevAccess ? 1 : 0 } : {}),
       })
       .where(eq(users.id, id))
       .run();
@@ -75,6 +78,7 @@ export async function PATCH(
     locale,
     passwordChanged: !!password,
     totpDisabled: !!disableTotp,
+    aiDevAccess,
   });
   return NextResponse.json({ ok: true });
 }

@@ -67,6 +67,7 @@ export async function POST(req: Request) {
     name: admin.name,
     role: admin.role,
     locale: admin.locale,
+    aiDevAccess: !!admin.aiDevAccess,
   });
   const res = NextResponse.json({ ok: true }, { status: 201 });
   res.cookies.set(SESSION_COOKIE, token, sessionCookieOptions());
