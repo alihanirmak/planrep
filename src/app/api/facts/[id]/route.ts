@@ -9,8 +9,12 @@ import { upsertFacts } from "@/lib/facts-write";
 import { WorkflowLockError } from "@/lib/workflow";
 import { BusinessRuleError } from "@/lib/business-rules";
 import { logAudit } from "@/lib/audit";
+import { listEffectiveMeasures, valueColumnForSlot } from "@/lib/model-measures";
 
-const bodySchema = z.object({ value: z.number().finite() });
+// measureCode: opsiyonel, coklu-olcu modellerinde HANGI olcunun duzenlendigini
+// belirtir (verilmezse slot 1 / birincil olcu varsayilir — geriye uyumlu,
+// tek-olcu modellerde zaten tek secenek budur).
+const bodySchema = z.object({ value: z.number().finite(), measureCode: z.string().max(40).optional() });
 
 // Tek bir ham fact satirinin degerini duzenler (/browser sayfasindaki
 // hucre-ici duzenleme icin). Mevcut toplu yazma altyapisini (upsertFacts)
@@ -40,9 +44,17 @@ export async function PATCH(
 
   const dims = getModelDims(modelRow.modelId);
   const slots = dims.map((d) => d.slot);
+  const measures = listEffectiveMeasures(modelRow.modelId);
+  const measureSlots = measures.map((m) => m.slot);
+  const targetMeasure = parsed.data.measureCode
+    ? measures.find((m) => m.code === parsed.data.measureCode)
+    : measures.find((m) => m.slot === 1) ?? measures[0];
+  if (!targetMeasure) return NextResponse.json({ error: "measure_not_found" }, { status: 400 });
+
+  const measureSelCols = measureSlots.map((s) => `${valueColumnForSlot(s)} AS ${valueColumnForSlot(s)}`).join(", ");
   const factRow = sqlite
-    .prepare(`SELECT ${slots.map((s) => `d${s}`).join(", ")}, value FROM facts WHERE id = ?`)
-    .get(id) as (Record<string, unknown> & { value: number }) | undefined;
+    .prepare(`SELECT ${slots.map((s) => `d${s}`).join(", ")}, ${measureSelCols} FROM facts WHERE id = ?`)
+    .get(id) as Record<string, unknown> | undefined;
   if (!factRow) return NextResponse.json({ error: "not_found" }, { status: 404 });
   const coords = slots.map((s) => String(factRow[`d${s}`] ?? ""));
 
@@ -66,8 +78,28 @@ export async function PATCH(
       .run(modelRow.modelId, `Hücre düzenleme #${id}`, session.id, 1, now).lastInsertRowid
   );
 
+  // Satir TAMAMEN SIL-YENIDEN-YAZ semantigiyle yazildigindan (bkz.
+  // lib/facts-write.ts), coklu-olcu modellerinde HEDEFLENMEYEN olculerin
+  // mevcut degerleri (factRow'dan) birlikte gonderilir — aksi halde
+  // duzenlenmeyen olculer NULL'a duserdi.
+  const oldTargetValue = Number(factRow[valueColumnForSlot(targetMeasure.slot)]);
+  const value =
+    targetMeasure.slot === 1 ? parsed.data.value : Number(factRow[valueColumnForSlot(1)] ?? 0);
+  const values: Record<number, number | null> = {};
+  for (const s of measureSlots) {
+    if (s === 1) continue;
+    values[s] = s === targetMeasure.slot ? parsed.data.value : ((factRow[valueColumnForSlot(s)] as number | null) ?? null);
+  }
+
   try {
-    upsertFacts(modelRow.modelId, dims, [{ coords, value: parsed.data.value }], uploadId, now, session.id);
+    upsertFacts(
+      modelRow.modelId,
+      dims,
+      [{ coords, value, values: measureSlots.length > 1 ? values : undefined }],
+      uploadId,
+      now,
+      session.id
+    );
   } catch (e) {
     if (e instanceof WorkflowLockError) {
       return NextResponse.json({ error: "workflow_locked", message: e.message }, { status: 423 });
@@ -88,14 +120,16 @@ export async function PATCH(
   logAudit(session.id, "facts.edit", "fact", id, {
     modelId: modelRow.modelId,
     coords,
-    oldValue: factRow.value,
+    measureCode: targetMeasure.code,
+    oldValue: oldTargetValue,
     newValue: parsed.data.value,
   });
 
   return NextResponse.json({
     ok: true,
     auditId: auditRow?.id ?? null,
-    oldValue: factRow.value,
+    measureCode: targetMeasure.code,
+    oldValue: oldTargetValue,
     newValue: parsed.data.value,
   });
 }

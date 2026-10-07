@@ -3,6 +3,7 @@ import { parseIdParam, invalidIdResponse } from "@/lib/route-params";
 import { getSession } from "@/lib/auth";
 import { sqlite } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
+import { getModelMeasures } from "@/lib/model-measures";
 
 export async function GET(
   _req: Request,
@@ -42,8 +43,9 @@ export async function GET(
        WHERE u.model_id = ? ORDER BY u.id DESC LIMIT 5`
     )
     .all(id);
+  const measures = getModelMeasures(id);
 
-  return NextResponse.json({ ...model, dims, factCount, reportCount, uploads });
+  return NextResponse.json({ ...model, dims, measures, factCount, reportCount, uploads });
 }
 
 // Model silme: fact, model boyutu, rapor ve ilgili yuklemeler birlikte silinir
@@ -76,6 +78,7 @@ export async function DELETE(
     }
     sqlite.prepare("DELETE FROM facts WHERE model_id = ?").run(id);
     sqlite.prepare("DELETE FROM model_dimensions WHERE model_id = ?").run(id);
+    sqlite.prepare("DELETE FROM model_measures WHERE model_id = ?").run(id);
     sqlite.prepare("DELETE FROM reports WHERE model_id = ?").run(id);
     sqlite.prepare("DELETE FROM uploads WHERE model_id = ?").run(id);
     sqlite.prepare("UPDATE dimensions SET owner_model_id = NULL WHERE owner_model_id = ?").run(id);

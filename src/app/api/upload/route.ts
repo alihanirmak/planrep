@@ -9,6 +9,7 @@ import { WorkflowLockError } from "@/lib/workflow";
 import { BusinessRuleError } from "@/lib/business-rules";
 import { logAudit } from "@/lib/audit";
 import { parseLocaleNumber } from "@/lib/number";
+import { listEffectiveMeasures } from "@/lib/model-measures";
 
 const MAX_ERRORS = 50;
 
@@ -52,15 +53,30 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "empty_file" }, { status: 400 });
   }
 
-  // Basliklari boyutlara esle (kod veya ad, buyuk/kucuk harf duyarsiz)
+  // Basliklari boyutlara esle (kod veya ad, buyuk/kucuk harf duyarsiz).
+  // COKLU-OLCU: model icin birden fazla olcu tanimlanmissa (listEffectiveMeasures),
+  // genel "DEGER"/"VALUE" basligi KULLANILMAZ — her olcu kendi kod/adiyla
+  // ayri bir kolon olarak eslenir (orn. "AMOUNT", "QUANTITY"). Tek-olcu
+  // modellerde (buyuk cogunluk) davranis BIREBIR ESKISI GIBI kalir.
+  const measures = listEffectiveMeasures(modelId);
+  const multiMeasure = measures.length > 1;
   const headerRow = ws.getRow(1);
   const colMap = new Map<number, number>(); // excel kolonu -> dim index
   let valueCol = -1;
+  const measureColBySlot = new Map<number, number>(); // olcu slotu -> excel kolonu
   const errors: string[] = [];
   headerRow.eachCell((cell, colNumber) => {
     const h = cellText(cell.value).toLocaleLowerCase("tr");
     if (!h) return;
-    if (["deger", "değer", "value", "tutar"].includes(h)) {
+    if (multiMeasure) {
+      const measure = measures.find(
+        (m) => m.code.toLocaleLowerCase("tr") === h || m.name.toLocaleLowerCase("tr") === h
+      );
+      if (measure) {
+        measureColBySlot.set(measure.slot, colNumber);
+        return;
+      }
+    } else if (["deger", "değer", "value", "tutar"].includes(h)) {
       valueCol = colNumber;
       return;
     }
@@ -71,7 +87,13 @@ export async function POST(req: Request) {
     if (idx >= 0) colMap.set(colNumber, idx);
     else errors.push(`Bilinmeyen kolon başlığı: "${cellText(cell.value)}"`);
   });
-  if (valueCol < 0) errors.push('Değer kolonu bulunamadı (başlık "DEGER" veya "Value" olmalı)');
+  if (multiMeasure) {
+    for (const m of measures) {
+      if (!measureColBySlot.has(m.slot)) errors.push(`Eksik ölçü kolonu: ${m.code} (${m.name})`);
+    }
+  } else if (valueCol < 0) {
+    errors.push('Değer kolonu bulunamadı (başlık "DEGER" veya "Value" olmalı)');
+  }
   for (const d of dims) {
     if (![...colMap.values()].includes(dims.indexOf(d))) {
       errors.push(`Eksik boyut kolonu: ${d.code} (${d.name})`);
@@ -94,7 +116,7 @@ export async function POST(req: Request) {
   // Boyut bazli veri yetkisi: kullanicinin yazamayacagi uyeler reddedilir
   const access = allowedSets(session.id, dims);
 
-  type FactRow = { coords: string[]; value: number };
+  type FactRow = { coords: string[]; value: number; values?: Record<number, number | null> };
   const parsed: FactRow[] = [];
   for (let r = 2; r <= ws.rowCount; r++) {
     const row = ws.getRow(r);
@@ -120,13 +142,31 @@ export async function POST(req: Request) {
         }
       }
     }
-    const rawVal = row.getCell(valueCol).value;
-    const num = parseLocaleNumber(typeof rawVal === "number" ? rawVal : cellText(rawVal));
-    if (Number.isNaN(num)) {
-      if (errors.length < MAX_ERRORS) errors.push(`Satır ${r}: geçersiz sayı değeri`);
-      bad = true;
+    if (multiMeasure) {
+      let primaryValue = 0;
+      const values: Record<number, number | null> = {};
+      for (const m of measures) {
+        const col = measureColBySlot.get(m.slot)!;
+        const rawVal = row.getCell(col).value;
+        const num = parseLocaleNumber(typeof rawVal === "number" ? rawVal : cellText(rawVal));
+        if (Number.isNaN(num)) {
+          if (errors.length < MAX_ERRORS) errors.push(`Satır ${r}: "${m.code}" için geçersiz sayı değeri`);
+          bad = true;
+          continue;
+        }
+        if (m.slot === 1) primaryValue = num;
+        else values[m.slot] = num;
+      }
+      if (!bad) parsed.push({ coords, value: primaryValue, values });
+    } else {
+      const rawVal = row.getCell(valueCol).value;
+      const num = parseLocaleNumber(typeof rawVal === "number" ? rawVal : cellText(rawVal));
+      if (Number.isNaN(num)) {
+        if (errors.length < MAX_ERRORS) errors.push(`Satır ${r}: geçersiz sayı değeri`);
+        bad = true;
+      }
+      if (!bad) parsed.push({ coords, value: num });
     }
-    if (!bad) parsed.push({ coords, value: num });
   }
 
   if (errors.length > 0) {

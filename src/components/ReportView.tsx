@@ -49,7 +49,7 @@ export default function ReportView({
         const pRes = await fetch("/api/pivot", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ modelId: d.modelId, rows: d.rows, cols: d.cols, filters }),
+          body: JSON.stringify({ modelId: d.modelId, rows: d.rows, cols: d.cols, filters, measureCode: d.measureCode }),
         });
         if (!pRes.ok) throw new Error();
         const { tuples } = await pRes.json();

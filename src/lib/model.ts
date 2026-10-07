@@ -23,12 +23,15 @@ export type DimInfo = {
   members: Member[];
 };
 
+export type MeasureInfo = { id: number; modelId: number; code: string; name: string; slot: number };
+
 export type ModelInfo = {
   id: number;
   code: string;
   name: string;
   description: string | null;
   dims: DimInfo[];
+  measures: MeasureInfo[];
 };
 
 export function getModels(tenantId: number): ModelInfo[] {
@@ -57,7 +60,28 @@ export function getModels(tenantId: number): ModelInfo[] {
     dimsByModel.set(modelId, arr);
   }
 
-  return models.map((m) => ({ ...m, dims: dimsByModel.get(m.id) ?? [] }));
+  // Olculer (measures) de boyutlarla AYNI N+1-onleyen toplu-okuma deseniyle
+  // cekilir — gercek (DB'de tanimli) satirlar donuyor, sanal varsayilan
+  // "VALUE" olcusu burada GOSTERILMEZ (bkz. lib/model-measures.ts listEffectiveMeasures
+  // notu) — UI'nin "henuz hic olcu tanimlanmadi" durumunu ayirt edebilmesi icin.
+  const measureRows = sqlite
+    .prepare(
+      `SELECT id, model_id AS modelId, code, name, slot FROM model_measures
+       WHERE model_id IN (${phModels}) ORDER BY model_id, slot`
+    )
+    .all(...modelIds) as MeasureInfo[];
+  const measuresByModel = new Map<number, MeasureInfo[]>();
+  for (const m of measureRows) {
+    const arr = measuresByModel.get(m.modelId) ?? [];
+    arr.push(m);
+    measuresByModel.set(m.modelId, arr);
+  }
+
+  return models.map((m) => ({
+    ...m,
+    dims: dimsByModel.get(m.id) ?? [],
+    measures: measuresByModel.get(m.id) ?? [],
+  }));
 }
 
 // Birden fazla boyutun uyelerini tek sorguda ceker (N+1'i onler).

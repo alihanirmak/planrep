@@ -41,6 +41,11 @@ export type ReportDefV2 = {
   rows: string[];
   cols: string[];
   filters: Record<string, string[]>;
+  // Coklu-olcu modellerinde HANGI olcunun gosterilecegi (opsiyonel — tek-olcu
+  // modellerde veya belirtilmediginde birincil/slot 1 olcu kullanilir, bkz.
+  // lib/model-measures.ts listEffectiveMeasures). Eski (bu alan olmadan)
+  // kaydedilmis raporlar bu nedenle degismeden calismaya devam eder.
+  measureCode?: string;
   calcColumns: CalcColumn[];
   calcRows: CalcRow[];
   condRules: CondRule[];

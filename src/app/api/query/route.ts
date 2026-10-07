@@ -15,6 +15,7 @@ const bodySchema = z.object({
   filters: z.record(z.string(), z.array(z.string())).default({}),
   page: z.number().int().min(0).optional(),
   pageSize: z.number().int().min(1).max(1000).optional(),
+  measureCode: z.string().max(40).optional(),
 });
 
 // Pivot ile ayni cache stratejisi (bkz. api/pivot/route.ts ustundeki not):
@@ -30,14 +31,14 @@ export async function POST(req: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
   }
-  const { modelId, rowDim, colDim, filters, page, pageSize } = parsed.data;
+  const { modelId, rowDim, colDim, filters, page, pageSize, measureCode } = parsed.data;
   if (getModelTenantId(modelId) !== session.tenantId) {
     return NextResponse.json({ error: "model_not_found" }, { status: 404 });
   }
   const pagination = page != null && pageSize != null ? { page, pageSize } : undefined;
-  const cacheKey = `query:v1:${modelId}:${session.id}:${hashCacheParams({ rowDim, colDim, filters, page, pageSize })}`;
+  const cacheKey = `query:v1:${modelId}:${session.id}:${hashCacheParams({ rowDim, colDim, filters, page, pageSize, measureCode })}`;
   const result = await cached(cacheKey, QUERY_CACHE_TTL_SECONDS, () =>
-    runQuery(modelId, rowDim, colDim, filters, session.id, pagination)
+    runQuery(modelId, rowDim, colDim, filters, session.id, pagination, measureCode)
   );
   if ("error" in result) {
     let message: string | undefined;

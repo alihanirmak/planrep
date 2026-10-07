@@ -3,19 +3,32 @@ import { getModelDims, rootMembers, type Member } from "./model";
 import { allowedSets } from "./access";
 import { buildFactWhereVariants, sumGroupedRows, MAX_AGGREGATE_RESULT_ROWS } from "./fact-filters";
 import type { QueryResult, QueryRow } from "./report-types";
+import { listEffectiveMeasures, valueColumnForSlot } from "./model-measures";
 
+// measureCode: coklu-olcu modellerinde HANGI olcunun aggregate edilecegini
+// belirtir (verilmezse birincil/slot 1 olcu — geriye uyumlu, tek-olcu
+// modellerde zaten tek secenek budur). Gecersiz/bulunamayan bir kod
+// verilirse sessizce birincil olcuye duser.
 export function runQuery(
   modelId: number,
   rowDim: string,
   colDim: string,
   filters: Record<string, string[]>,
   userId?: number,
-  pagination?: { page: number; pageSize: number }
+  pagination?: { page: number; pageSize: number },
+  measureCode?: string
 ): QueryResult | { error: string } {
   const dims = getModelDims(modelId);
   const rowD = dims.find((d) => d.code === rowDim);
   const colD = dims.find((d) => d.code === colDim);
   if (!rowD || !colD || rowDim === colDim) return { error: "invalid_dims" };
+
+  const measures = listEffectiveMeasures(modelId);
+  const measure =
+    (measureCode ? measures.find((m) => m.code === measureCode) : undefined) ??
+    measures.find((m) => m.slot === 1) ??
+    measures[0];
+  const valueCol = valueColumnForSlot(measure.slot);
 
   // Sayfalama: rowDim'in kok uyeleri sayfalanir, her sayfaya secilen kok
   // uyelerin TUM alt agaci (withDescendants, buildFactWhereVariants icinde)
@@ -53,7 +66,7 @@ export function runQuery(
     (v) =>
       sqlite
         .prepare(
-          `SELECT d${rowD.slot} AS r, d${colD.slot} AS c, SUM(value) AS v
+          `SELECT d${rowD.slot} AS r, d${colD.slot} AS c, SUM(${valueCol}) AS v
            FROM facts WHERE ${v.sql} GROUP BY r, c`
         )
         .all(...v.params) as Array<Record<string, unknown>>

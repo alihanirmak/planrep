@@ -21,6 +21,7 @@ type ModelDetail = {
     slot: number;
     memberCount: number;
   }>;
+  measures: Array<{ id: number; modelId: number; code: string; name: string; slot: number }>;
   factCount: number;
   reportCount: number;
   uploads: Array<{
@@ -33,6 +34,8 @@ type ModelDetail = {
   }>;
 };
 
+type MeasureInfo = ModelDetail["measures"][number];
+
 type DimWithMembers = { id: number; code: string; name: string; members: Member[] };
 
 type BusinessRule = {
@@ -42,6 +45,7 @@ type BusinessRule = {
   scopeFilters: Record<string, string[]>;
   op: "<" | ">" | "<=" | ">=" | "=" | "<>";
   value: number;
+  measureCode: string | null;
   severity: "block" | "warn";
   message: string | null;
   active: boolean;
@@ -73,7 +77,12 @@ export default function ModelDetailPage() {
   const [ruleSeverity, setRuleSeverity] = useState<BusinessRule["severity"]>("block");
   const [ruleMessage, setRuleMessage] = useState("");
   const [ruleScope, setRuleScope] = useState<Record<string, string[]>>({});
+  const [ruleMeasureCode, setRuleMeasureCode] = useState("");
   const [ruleMsg, setRuleMsg] = useState<string | null>(null);
+  const [showNewMeasure, setShowNewMeasure] = useState(false);
+  const [measureCode, setMeasureCode] = useState("");
+  const [measureName, setMeasureName] = useState("");
+  const [measureMsg, setMeasureMsg] = useState<string | null>(null);
 
   const load = useCallback(() => {
     fetch(`/api/models/${id}`).then((r) => (r.ok ? r.json() : null)).then(setModel);
@@ -114,6 +123,7 @@ export default function ModelDetailPage() {
         scopeFilters: ruleScope,
         op: ruleOp,
         value,
+        measureCode: ruleMeasureCode || null,
         severity: ruleSeverity,
         message: ruleMessage.trim() || null,
       }),
@@ -124,6 +134,7 @@ export default function ModelDetailPage() {
       setRuleValue("0");
       setRuleMessage("");
       setRuleScope({});
+      setRuleMeasureCode("");
       setRuleMsg(null);
       load();
     } else {
@@ -145,6 +156,37 @@ export default function ModelDetailPage() {
     if (!confirm(`"${rule.name}" kuralı silinsin mi?`)) return;
     await fetch(`/api/business-rules/${rule.id}`, { method: "DELETE" });
     load();
+  }
+
+  async function addMeasure() {
+    if (!model || !measureCode.trim() || !measureName.trim()) return;
+    const res = await fetch(`/api/models/${model.id}/measures`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: measureCode.trim().toUpperCase(), name: measureName.trim() }),
+    });
+    if (res.ok) {
+      setShowNewMeasure(false);
+      setMeasureCode("");
+      setMeasureName("");
+      setMeasureMsg(null);
+      load();
+    } else {
+      const body = await res.json().catch(() => ({}));
+      setMeasureMsg(body.message ?? body.error ?? "Ölçü oluşturulamadı");
+    }
+  }
+
+  async function removeMeasure(measure: MeasureInfo) {
+    if (!model) return;
+    if (!confirm(`"${measure.name}" ölçüsü silinsin mi?`)) return;
+    const res = await fetch(`/api/models/${model.id}/measures/${measure.id}`, { method: "DELETE" });
+    if (res.ok) {
+      load();
+    } else {
+      const body = await res.json().catch(() => ({}));
+      setMeasureMsg(body.message ?? body.error ?? "Ölçü silinemedi");
+    }
   }
 
   if (!model) {
@@ -239,6 +281,91 @@ export default function ModelDetailPage() {
         </table>
       </div>
 
+      {/* Olculer (measures) */}
+      <div className="mt-8 flex items-center justify-between">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
+          Ölçüler (Measures)
+        </h2>
+        {role === "admin" && model.measures.length < 8 && (
+          <button
+            onClick={() => setShowNewMeasure(!showNewMeasure)}
+            className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+          >
+            + Yeni Ölçü
+          </button>
+        )}
+      </div>
+      {model.measures.length === 0 && (
+        <p className="mt-2 text-xs text-slate-400">
+          Henüz ölçü tanımlanmadı — model varsayılan tek bir &quot;Değer&quot; ölçüsüyle çalışır. Ölçü
+          eklemek, model başına birden fazla değer (örn. Tutar + Miktar) tutmayı mümkün kılar.
+        </p>
+      )}
+
+      {showNewMeasure && (
+        <div className="mt-2 rounded-xl bg-white p-4 shadow-sm">
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="flex flex-col text-xs text-slate-500">
+              Kod
+              <input
+                value={measureCode}
+                onChange={(e) => setMeasureCode(e.target.value)}
+                placeholder="AMOUNT"
+                className="mt-1 w-32 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 font-mono"
+              />
+            </label>
+            <label className="flex flex-col text-xs text-slate-500">
+              Ad
+              <input
+                value={measureName}
+                onChange={(e) => setMeasureName(e.target.value)}
+                placeholder="Tutar"
+                className="mt-1 w-48 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
+              />
+            </label>
+            <button
+              onClick={addMeasure}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            >
+              Oluştur
+            </button>
+          </div>
+          {measureMsg && <div className="mt-2 text-sm text-red-500">{measureMsg}</div>}
+        </div>
+      )}
+
+      {model.measures.length > 0 && (
+        <div className="mt-2 overflow-hidden rounded-xl bg-white shadow-sm">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+              <tr>
+                <th className="w-14 px-5 py-2.5 text-left">Slot</th>
+                <th className="px-5 py-2.5 text-left">Kod</th>
+                <th className="px-5 py-2.5 text-left">Ad</th>
+                <th className="px-5 py-2.5"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-slate-700">
+              {model.measures.map((m) => (
+                <tr key={m.id}>
+                  <td className="px-5 py-3 font-mono text-xs text-slate-400">v{m.slot}</td>
+                  <td className="px-5 py-3 font-mono text-xs">{m.code}</td>
+                  <td className="px-5 py-3 font-medium">{m.name}</td>
+                  <td className="px-5 py-3 text-right">
+                    {role === "admin" && (
+                      <button onClick={() => removeMeasure(m)} className="text-xs text-red-500 hover:underline">
+                        Sil
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {measureMsg && !showNewMeasure && <div className="mt-2 text-sm text-red-500">{measureMsg}</div>}
+
       {/* Son yuklemeler */}
       <h2 className="mt-8 text-sm font-semibold uppercase tracking-wide text-slate-400">
         Son Yüklemeler
@@ -328,6 +455,23 @@ export default function ModelDetailPage() {
                 className="mt-1 w-28 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
               />
             </label>
+            {model.measures.length > 0 && (
+              <label className="flex flex-col text-xs text-slate-500">
+                Ölçü
+                <select
+                  value={ruleMeasureCode}
+                  onChange={(e) => setRuleMeasureCode(e.target.value)}
+                  className="mt-1 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
+                >
+                  <option value="">(tüm ölçüler)</option>
+                  {model.measures.map((m) => (
+                    <option key={m.code} value={m.code}>
+                      {m.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <label className="flex flex-col text-xs text-slate-500">
               Şiddet
               <select
@@ -378,6 +522,7 @@ export default function ModelDetailPage() {
             <tr>
               <th className="px-5 py-2.5 text-left">Ad</th>
               <th className="px-5 py-2.5 text-left">Koşul</th>
+              <th className="px-5 py-2.5 text-left">Ölçü</th>
               <th className="px-5 py-2.5 text-left">Kapsam</th>
               <th className="px-5 py-2.5 text-left">Şiddet</th>
               <th className="px-5 py-2.5"></th>
@@ -389,6 +534,9 @@ export default function ModelDetailPage() {
                 <td className="px-5 py-2.5 font-medium">{r.name}</td>
                 <td className="px-5 py-2.5 text-xs">
                   değer {OP_LABEL[r.op]} {r.value}
+                </td>
+                <td className="px-5 py-2.5 font-mono text-xs text-slate-500">
+                  {r.measureCode ?? "Tüm ölçüler"}
                 </td>
                 <td className="px-5 py-2.5 text-xs text-slate-500">
                   {Object.keys(r.scopeFilters).length === 0
@@ -422,7 +570,7 @@ export default function ModelDetailPage() {
             ))}
             {rules.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-5 py-5 text-sm text-slate-400">
+                <td colSpan={6} className="px-5 py-5 text-sm text-slate-400">
                   Henüz iş kuralı tanımlanmadı.
                 </td>
               </tr>

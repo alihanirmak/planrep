@@ -165,3 +165,51 @@ async function ccDimensionId(): Promise<number> {
   const row = sqlite.prepare("SELECT id FROM dimensions WHERE code='CC'").get() as { id: number };
   return row.id;
 }
+
+describe("runQuery — coklu-olcu (measureCode)", () => {
+  let multiModelId: number;
+
+  beforeAll(() => {
+    const now = new Date().toISOString();
+    const ccDim = sqlite.prepare("SELECT id FROM dimensions WHERE code='CC'").get() as { id: number };
+    const verDim = sqlite.prepare("SELECT id FROM dimensions WHERE code='VER'").get() as { id: number };
+    multiModelId = Number(
+      sqlite
+        .prepare("INSERT INTO models (code, name, created_at) VALUES (?,?,?)")
+        .run("QTEST_MULTI", "Query Test Multi", now).lastInsertRowid
+    );
+    sqlite
+      .prepare("INSERT INTO model_dimensions (model_id, dimension_id, slot) VALUES (?,?,?)")
+      .run(multiModelId, ccDim.id, 1);
+    sqlite
+      .prepare("INSERT INTO model_dimensions (model_id, dimension_id, slot) VALUES (?,?,?)")
+      .run(multiModelId, verDim.id, 2);
+    sqlite
+      .prepare("INSERT INTO model_measures (model_id, code, name, slot, created_at) VALUES (?,?,?,?,?)")
+      .run(multiModelId, "AMOUNT", "Tutar", 1, now);
+    sqlite
+      .prepare("INSERT INTO model_measures (model_id, code, name, slot, created_at) VALUES (?,?,?,?,?)")
+      .run(multiModelId, "QTY", "Miktar", 2, now);
+    sqlite
+      .prepare("INSERT INTO facts (model_id, d1, d2, value, value2, upload_id, updated_at) VALUES (?,?,?,?,?,NULL,?)")
+      .run(multiModelId, "CC0", "BUDGET", 100, 7, now);
+  });
+
+  it("measureCode belirtilmezse birincil (slot 1 / AMOUNT) olcu kullanilir", () => {
+    const result = runQuery(multiModelId, "CC", "VER", {});
+    if ("error" in result) throw new Error("hata bekleniyordu yoktu: " + result.error);
+    expect(result.grandTotal).toBe(100);
+  });
+
+  it("measureCode belirtilince ilgili olcunun kolonu (value2) aggregate edilir", () => {
+    const result = runQuery(multiModelId, "CC", "VER", {}, undefined, undefined, "QTY");
+    if ("error" in result) throw new Error("hata bekleniyordu yoktu: " + result.error);
+    expect(result.grandTotal).toBe(7);
+  });
+
+  it("gecersiz measureCode icin sessizce birincil olcuye duser", () => {
+    const result = runQuery(multiModelId, "CC", "VER", {}, undefined, undefined, "NOPE");
+    if ("error" in result) throw new Error("hata bekleniyordu yoktu: " + result.error);
+    expect(result.grandTotal).toBe(100);
+  });
+});

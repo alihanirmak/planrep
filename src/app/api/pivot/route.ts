@@ -8,6 +8,7 @@ import { buildFactWhereVariants, sumGroupedRows, MAX_AGGREGATE_RESULT_ROWS } fro
 import { formatT } from "@/lib/i18n";
 import { getServerT } from "@/lib/i18n-server";
 import { cached, hashCacheParams } from "@/lib/cache";
+import { listEffectiveMeasures, valueColumnForSlot } from "@/lib/model-measures";
 
 const bodySchema = z.object({
   modelId: z.number().int(),
@@ -16,6 +17,7 @@ const bodySchema = z.object({
   filters: z.record(z.string(), z.array(z.string())).default({}),
   page: z.number().int().min(0).optional(),
   pageSize: z.number().int().min(1).max(1000).optional(),
+  measureCode: z.string().max(40).optional(),
 });
 
 // Pivot sonuclari (facts tablosu uzerinde agir GROUP BY/SUM) kisa sureli
@@ -34,7 +36,7 @@ export async function POST(req: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
   }
-  const { modelId, rows, cols, filters, page, pageSize } = parsed.data;
+  const { modelId, rows, cols, filters, page, pageSize, measureCode } = parsed.data;
   if (getModelTenantId(modelId) !== session.tenantId) {
     return NextResponse.json({ error: "model_not_found" }, { status: 404 });
   }
@@ -48,9 +50,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "invalid_dims" }, { status: 400 });
   }
 
-  const cacheKey = `pivot:v1:${modelId}:${session.id}:${hashCacheParams({ rows, cols, filters, page, pageSize })}`;
+  const cacheKey = `pivot:v1:${modelId}:${session.id}:${hashCacheParams({ rows, cols, filters, page, pageSize, measureCode })}`;
   const body = await cached(cacheKey, PIVOT_CACHE_TTL_SECONDS, () =>
-    computePivot(session.id, modelId, rows, cols, filters, page, pageSize)
+    computePivot(session.id, modelId, rows, cols, filters, page, pageSize, measureCode)
   );
   if ("error" in body) {
     if (body.error === "result_too_large") {
@@ -79,11 +81,18 @@ function computePivot(
   cols: string[],
   filters: Record<string, string[]>,
   page: number | undefined,
-  pageSize: number | undefined
+  pageSize: number | undefined,
+  measureCode?: string
 ): PivotComputeResult {
   const dims = getModelDims(modelId);
   const rowD = rows.map((c) => dims.find((d) => d.code === c));
   const colD = cols.map((c) => dims.find((d) => d.code === c));
+  const measures = listEffectiveMeasures(modelId);
+  const measure =
+    (measureCode ? measures.find((m) => m.code === measureCode) : undefined) ??
+    measures.find((m) => m.slot === 1) ??
+    measures[0];
+  const valueCol = valueColumnForSlot(measure.slot);
 
   // Sayfalama: ilk satir boyutunun (rows[0]) kok uyeleri sayfalanir, sayfaya
   // secilen kok uyelerin TUM alt agaci dahil edilir — boylece client'ta
@@ -123,7 +132,7 @@ function computePivot(
     (v) =>
       sqlite
         .prepare(
-          `SELECT ${rowSel}, ${colSel}, SUM(value) AS v
+          `SELECT ${rowSel}, ${colSel}, SUM(${valueCol}) AS v
            FROM facts WHERE ${v.sql} GROUP BY ${groupBy}`
         )
         .all(...v.params) as Array<Record<string, unknown>>

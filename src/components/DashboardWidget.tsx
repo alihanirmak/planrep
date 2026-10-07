@@ -47,6 +47,7 @@ export type Widget = {
     rowDim: string;
     colDim: string;
     filters: Record<string, string[]>;
+    measureCode?: string;
   };
 };
 

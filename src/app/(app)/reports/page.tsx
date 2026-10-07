@@ -29,7 +29,8 @@ import { useVersionConflict } from "@/lib/hooks/useVersionConflict";
 import { useHotkey } from "@/lib/shortcuts";
 
 type Dim = PivotDim & { id: number; slot: number };
-type Model = { id: number; code: string; name: string; dims: Dim[] };
+type MeasureInfo = { id: number; modelId: number; code: string; name: string; slot: number };
+type Model = { id: number; code: string; name: string; dims: Dim[]; measures?: MeasureInfo[] };
 type SavedReport = { id: number; name: string; ownerName: string; shared: number; mine: boolean };
 type Comment = {
   id: number;
@@ -248,6 +249,7 @@ export default function ReportsPage() {
   const [rowsZone, setRowsZone] = useState<string[]>([]);
   const [colsZone, setColsZone] = useState<string[]>([]);
   const [filters, setFilters] = useState<Record<string, string[]>>({});
+  const [measureCode, setMeasureCode] = useState<string>("");
   const [calcColumns, setCalcColumns] = useState<CalcColumn[]>([]);
   const [calcRows, setCalcRows] = useState<CalcRow[]>([]);
   const [condRules, setCondRules] = useState<CondRule[]>([]);
@@ -304,7 +306,7 @@ export default function ReportsPage() {
             if (m) {
               applyDef(def, "AI Raporu");
               setMode("view");
-              runWith(m, def.rows, def.cols, def.filters);
+              runWith(m, def.rows, def.cols, def.filters, def.measureCode);
               return;
             }
           } catch {
@@ -324,6 +326,7 @@ export default function ReportsPage() {
     setRowsZone([lastDim?.code ?? m.dims[0].code]);
     setColsZone([time && time !== lastDim ? time.code : m.dims[0].code]);
     setFilters({});
+    setMeasureCode("");
     setEngine(null);
   }
 
@@ -332,6 +335,7 @@ export default function ReportsPage() {
     setRowsZone(def.rows);
     setColsZone(def.cols);
     setFilters(def.filters);
+    setMeasureCode(def.measureCode ?? "");
     setCalcColumns(def.calcColumns);
     setCalcRows(def.calcRows);
     setCondRules(def.condRules);
@@ -371,13 +375,19 @@ export default function ReportsPage() {
   }
 
   // --- Calistir ---
-  async function runWith(m: Model, rows: string[], cols: string[], f: Record<string, string[]>) {
+  async function runWith(
+    m: Model,
+    rows: string[],
+    cols: string[],
+    f: Record<string, string[]>,
+    mc?: string
+  ) {
     setBusy(true);
     setMsg(null);
     const res = await fetch("/api/pivot", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ modelId: m.id, rows, cols, filters: f }),
+      body: JSON.stringify({ modelId: m.id, rows, cols, filters: f, measureCode: mc || undefined }),
     });
     setBusy(false);
     if (!res.ok) {
@@ -398,7 +408,7 @@ export default function ReportsPage() {
       setMsg("En az bir satır ve bir sütun boyutu gerekli");
       return;
     }
-    await runWith(model, rowsZone, colsZone, filters);
+    await runWith(model, rowsZone, colsZone, filters, measureCode);
   }
 
   const view = useMemo(
@@ -526,6 +536,7 @@ export default function ReportsPage() {
       rows: rowsZone,
       cols: colsZone,
       filters,
+      measureCode: measureCode || undefined,
       calcColumns,
       calcRows,
       condRules,
@@ -561,7 +572,7 @@ export default function ReportsPage() {
     loadComments(r.id);
     setMode("view");
     const m = models.find((x) => x.id === def.modelId);
-    if (m) runWith(m, def.rows, def.cols, def.filters);
+    if (m) runWith(m, def.rows, def.cols, def.filters, def.measureCode);
   }
 
   async function save(force = false) {
@@ -1006,6 +1017,20 @@ export default function ReportsPage() {
                   </option>
                 ))}
               </select>
+              {model && model.measures && model.measures.length > 0 && (
+                <select
+                  value={measureCode}
+                  onChange={(e) => setMeasureCode(e.target.value)}
+                  className="mb-2 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-800"
+                >
+                  <option value="">Ölçü: {model.measures.find((m) => m.slot === 1)?.name ?? "Değer"} (varsayılan)</option>
+                  {model.measures.map((m) => (
+                    <option key={m.code} value={m.code}>
+                      Ölçü: {m.name}
+                    </option>
+                  ))}
+                </select>
+              )}
               <div className="space-y-2">
                 <DropZone zone="rows" label="Satırlar (iç içe)" items={rowsZone} hint="buraya sürükle" dims={model?.dims ?? []} onMove={moveDim} />
                 <DropZone zone="cols" label="Sütunlar" items={colsZone} hint="buraya sürükle" dims={model?.dims ?? []} onMove={moveDim} />

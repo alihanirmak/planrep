@@ -11,7 +11,8 @@ import { useVersionConflict } from "@/lib/hooks/useVersionConflict";
 import { useHotkey } from "@/lib/shortcuts";
 
 type Dim = { id: number; code: string; name: string; members: Member[] };
-type Model = { id: number; code: string; name: string; dims: Dim[] };
+type MeasureInfo = { id: number; modelId: number; code: string; name: string; slot: number };
+type Model = { id: number; code: string; name: string; dims: Dim[]; measures?: MeasureInfo[] };
 type SavedDashboard = { id: number; name: string; ownerName: string; shared: number; mine: boolean };
 type SavedReport = { id: number; name: string; mine: boolean; ownerName: string };
 
@@ -61,8 +62,9 @@ export default function DashboardsPage() {
     modelId: number | null;
     rowDim: string;
     colDim: string;
+    measureCode: string;
     filters: Record<string, string>;
-  }>({ type: "bar", title: "", modelId: null, rowDim: "", colDim: "", filters: {} });
+  }>({ type: "bar", title: "", modelId: null, rowDim: "", colDim: "", measureCode: "", filters: {} });
 
   const draftModel = useMemo(() => models.find((m) => m.id === draft.modelId) ?? null, [models, draft.modelId]);
   const allDims = useMemo(() => {
@@ -206,6 +208,7 @@ export default function DashboardsPage() {
             rowDim: def.rows[0],
             colDim: def.cols[0],
             filters: def.filters,
+            measureCode: def.measureCode,
           },
         },
       ]);
@@ -224,7 +227,7 @@ export default function DashboardsPage() {
           draft.title.trim() ||
           `${draftModel.name} — ${draftModel.dims.find((d) => d.code === draft.rowDim)?.name ?? draft.rowDim}`,
         w: 1,
-        query: { modelId: draftModel.id, rowDim: draft.rowDim, colDim: draft.colDim, filters },
+        query: { modelId: draftModel.id, rowDim: draft.rowDim, colDim: draft.colDim, filters, measureCode: draft.measureCode || undefined },
       },
     ]);
     setShowForm(false);
@@ -452,6 +455,19 @@ export default function DashboardsPage() {
                   ))}
                 </select>
               </label>
+              {draftModel && draftModel.measures && draftModel.measures.length > 0 && (
+                <label className="flex flex-col text-xs text-slate-500">
+                  Ölçü
+                  <select value={draft.measureCode} onChange={(e) => setDraft({ ...draft, measureCode: e.target.value })} className="mt-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900">
+                    <option value="">(varsayılan)</option>
+                    {draftModel.measures.map((m) => (
+                      <option key={m.code} value={m.code}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
               {draftOtherDims.map((d) => (
                 <label key={d.code} className="flex flex-col text-xs text-slate-500">
                   {d.name}

@@ -9,6 +9,7 @@ import { upsertFacts, type FactWrite } from "@/lib/facts-write";
 import { WorkflowLockError } from "@/lib/workflow";
 import { BusinessRuleError } from "@/lib/business-rules";
 import { logAudit } from "@/lib/audit";
+import { listEffectiveMeasures, valueColumnForSlot } from "@/lib/model-measures";
 
 const schema = z.object({
   modelId: z.number().int(),
@@ -52,10 +53,12 @@ export async function POST(req: Request) {
   if (empty) return NextResponse.json({ ok: true, copied: 0 });
 
   const sel = dims.map((d) => `d${d.slot} AS d${d.slot}`).join(", ");
+  const measures = listEffectiveMeasures(modelId);
+  const measureSelCols = measures.map((m) => valueColumnForSlot(m.slot)).join(", ");
   const sourceRows: Array<Record<string, unknown>> = [];
   for (const v of variants) {
     const part = sqlite
-      .prepare(`SELECT ${sel}, value FROM facts WHERE ${v.sql}`)
+      .prepare(`SELECT ${sel}, ${measureSelCols} FROM facts WHERE ${v.sql}`)
       .all(...v.params) as Array<Record<string, unknown>>;
     sourceRows.push(...part);
   }
@@ -67,12 +70,20 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "forbidden_target_version" }, { status: 403 });
   }
 
-  const rows: FactWrite[] = sourceRows.map((r) => ({
-    coords: dims.map((d) =>
+  const rows: FactWrite[] = sourceRows.map((r) => {
+    const coords = dims.map((d) =>
       d.code === versionDim.code ? toVersion : String(r[`d${d.slot}`])
-    ),
-    value: Number(r.value),
-  }));
+    );
+    const value = Number(r[valueColumnForSlot(1)]);
+    if (measures.length <= 1) return { coords, value };
+    const values: Record<number, number | null> = {};
+    for (const m of measures) {
+      if (m.slot === 1) continue;
+      const raw = r[valueColumnForSlot(m.slot)];
+      values[m.slot] = raw == null ? null : Number(raw);
+    }
+    return { coords, value, values };
+  });
 
   const now = new Date().toISOString();
   const uploadId = Number(

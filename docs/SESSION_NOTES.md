@@ -463,3 +463,72 @@ Tamamlanan Faz 3 maddeleri (hepsi ayrı commit):
   maddesi "Faz A (çekirdek) TAMAMLANDI" olarak güncellendi, Faz B'ye
   bırakılan kapsam (UI/uç nokta genişletmesi) açıkça not edildi.
 - **Henüz commit edilmedi** — sıradaki adım commit+push.
+
+## 2026-10-07 — Çoklu-ölçü (multi-measure) Faz B (UI/uç nokta) TAMAMLANDI
+
+- Önceki oturumda Faz A (çekirdek — `model_measures`, `value2..value8`,
+  `upsertFacts`/`revertUpload`/`fact-audit`/`business-rules` motor desteği)
+  commit edilmişti; bu oturumda ROADMAP'te kasıtlı olarak Faz B'ye
+  bırakılan UI/uç nokta genişletmesi bitirildi.
+- **Model yönetim UI'ı:** `modeling/models/[id]/page.tsx`'e "Ölçüler
+  (Measures)" paneli eklendi — `dimension-attributes` panelindeki CRUD
+  deseniyle AYNI (liste + kod/ad ile oluşturma formu + admin-only silme).
+  İş kuralı formuna (ve sonuç tablosuna) model birden fazla ölçüye sahipse
+  görünen bir "Ölçü" `<select>` eklendi (`measureCode` state, boş =
+  "tüm ölçüler" — geriye uyumlu). `GET /api/models/[id]` artık `measures`
+  alanını da döndürüyor; model DELETE transaction'ına `model_measures`
+  kaskad temizliği eklendi (önceden eksikti, yeni bir gap olurdu).
+- **Yazma uçları — çoklu-ölçü GİRİŞİ:**
+  - `PATCH /api/facts/[id]` — opsiyonel `measureCode` body alanı (hücre
+    düzenleme hangi ölçüyü hedefliyor); satır TAM SİL-YENİDEN-YAZ
+    semantiğiyle yazıldığından hedeflenmeyen diğer ölçülerin mevcut
+    değerleri okunup birlikte gönderiliyor (aksi halde NULL'a düşerlerdi).
+  - `POST /api/upload` (Excel/SAP import) — model birden fazla ölçüye
+    sahipse genel "DEGER"/"VALUE" başlığı KULLANILMAZ, her ölçünün kod/adı
+    kendi Excel kolonu olarak eşlenir (eksik ölçü kolonu → doğrulama
+    hatası). Tek-ölçü modellerde (büyük çoğunluk) davranış birebir eskisi.
+  - `POST /api/scenario/copy` — `listEffectiveMeasures`/`valueColumnForSlot`
+    ile (fact-audit.ts'teki AYNI desen) tüm ölçüler birlikte kopyalanıyor.
+- **Okuma/raporlama tarafı:** `lib/query.ts` (`runQuery`) ve
+  `app/api/pivot/route.ts` (`computePivot`) artık opsiyonel `measureCode`
+  parametresi/alanı alıyor — verilmezse birincil (slot 1) ölçü kullanılır,
+  yani eski `SUM(value)` davranışı AYNEN korunuyor (geriye uyumlu).
+  `/api/query` body şemasına da eklendi. **Önemli bulgu (grep ile
+  doğrulandı):** pivot/report zincirinin geri kalanı (`lib/pivot.ts`
+  `createPivotEngine`, `report-types.ts` `computeCalcCells`,
+  `PivotGrid.tsx`, `DashboardWidget.tsx`, Excel/PPTX/OData export'ları)
+  zaten "measure-agnostic" tasarlanmıştı — generic `cells`/`v` anahtarlı
+  sayı nesneleriyle çalışıyorlar, DB kolon adını hiç bilmiyorlar — bu
+  yüzden SADECE `lib/query.ts` ve `api/pivot/route.ts`'teki iki
+  `SUM(value)` SQL ifadesini parametrize etmek yeterli oldu.
+- **UI tarafında ölçü seçimi:** `lib/model.ts` `getModels()`/`ModelInfo`'ya
+  `measures` alanı eklendi (boyutlarla AYNI N+1-önleyen toplu-okuma
+  deseniyle — `model_measures` tablosu `model_id IN (...)` ile tek
+  sorguda çekiliyor). `reports/page.tsx`'teki "Model & Boyutlar" tasarım
+  panelinde model birden fazla ölçüye sahipse bir "Ölçü" seçici belirir;
+  seçim `measureCode` state'inde tutulur, `runWith`/`currentDef` üzerinden
+  `/api/pivot` body'sine ve kaydedilen rapor tanımına (`ReportDefV2.
+  measureCode`, opsiyonel) akar. `ReportView.tsx` (salt-okunur rapor
+  render'ı) bu alanı okuyup `/api/pivot` çağrısına ekliyor.
+  `dashboards/page.tsx`'teki manuel widget oluşturma formuna da aynı
+  seçici eklendi (`Widget.query.measureCode`, opsiyonel) — rapor-tabanlı
+  widget'lar için de (`def.measureCode`) otomatik taşınıyor.
+  `DashboardWidget.tsx`'in `/api/query` çağrısı `...widget.query`'yi
+  olduğu gibi spread ettiğinden tip eklemesi dışında ek kod gerekmedi.
+- 3 yeni test: `query.test.ts`'e "runQuery — çoklu-ölçü (measureCode)"
+  bloğu (measureCode verilmezse birincil ölçü, verilince ilgili `value2`
+  kolonunun aggregate edildiği, geçersiz kod için sessizce birincil ölçüye
+  düşüldüğü) — toplam **341 test**. `api/pivot/route.ts`'teki
+  `computePivot` için (route handler'lar için projede zaten önceden de
+  doğrudan birim testi yoktu, mevcut desenle tutarlı) ayrı bir test
+  eklenmedi — mantığı `runQuery` ile birebir aynı ve `runQuery` test
+  kapsamında doğrulandı.
+- `tsc --noEmit` temiz, `eslint` 0 hata (1 önceden var olan ilişkisiz
+  uyarı — `Sidebar.tsx`), `next build` başarılı (61 route derlendi, 3
+  önceden var olan ilişkisiz uyarı). Gerçek dev DB'de `model_measures`
+  şeması ve boş tablo durumu doğrulandı (önceki migration'ın kalıcılığı
+  teyit edildi).
+- `docs/ROADMAP.md`'deki backlog maddesi "Faz A + Faz B (UI/uç nokta)
+  TAMAMLANDI" olarak güncellendi — "sınırsız/çoklu değer (measure) kolonu"
+  maddesi artık tamamen bitti sayılır.
+- **Henüz commit edilmedi** — sıradaki adım commit+push.
