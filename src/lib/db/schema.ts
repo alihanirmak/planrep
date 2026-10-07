@@ -111,14 +111,14 @@ export const models = sqliteTable("models", {
   createdAt: text("created_at").notNull(),
 });
 
-// Bir modelin boyutlari: slot 1..8 -> facts tablosundaki d1..d8 kolonlarina karsilik gelir
+// Bir modelin boyutlari: slot 1..16 -> facts tablosundaki d1..d16 kolonlarina karsilik gelir
 export const modelDimensions = sqliteTable(
   "model_dimensions",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
     modelId: integer("model_id").notNull(),
     dimensionId: integer("dimension_id").notNull(),
-    slot: integer("slot").notNull(), // 1..8
+    slot: integer("slot").notNull(), // 1..16
   },
   (t) => [
     uniqueIndex("uq_modeldim_slot").on(t.modelId, t.slot),
@@ -139,6 +139,14 @@ export const facts = sqliteTable(
     d6: text("d6"),
     d7: text("d7"),
     d8: text("d8"),
+    d9: text("d9"),
+    d10: text("d10"),
+    d11: text("d11"),
+    d12: text("d12"),
+    d13: text("d13"),
+    d14: text("d14"),
+    d15: text("d15"),
+    d16: text("d16"),
     value: real("value").notNull(),
     uploadId: integer("upload_id"),
     updatedAt: text("updated_at").notNull(),
@@ -295,6 +303,14 @@ export const factAudit = sqliteTable(
     d6: text("d6"),
     d7: text("d7"),
     d8: text("d8"),
+    d9: text("d9"),
+    d10: text("d10"),
+    d11: text("d11"),
+    d12: text("d12"),
+    d13: text("d13"),
+    d14: text("d14"),
+    d15: text("d15"),
+    d16: text("d16"),
     oldValue: real("old_value"),
     newValue: real("new_value"),
     source: text("source", { enum: ["write", "revert", "rollback"] })

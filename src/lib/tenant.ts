@@ -10,7 +10,7 @@
 // (model_id/entity sahipligi) tenant kontrolunden GECTIKTEN SONRA
 // saglanir (transitive izolasyon). Bu, her yazma yolunda tenant_id
 // kopyalamaktan kaynaklanabilecek tutarsizlik riskini azaltir ve mevcut
-// "facts" EAV tablosuna (zaten d1..d8 sabit kolon limiti var) yeni bir
+// "facts" EAV tablosuna (zaten d1..d16 sabit kolon limiti var) yeni bir
 // kolon eklemekten kacinir.
 //
 // Bu uygulamada ayri bir "superadmin" rolu YOK — her tenant kendi admin'ini

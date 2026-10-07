@@ -77,6 +77,7 @@ CREATE TABLE IF NOT EXISTS facts (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   model_id INTEGER NOT NULL,
   d1 TEXT, d2 TEXT, d3 TEXT, d4 TEXT, d5 TEXT, d6 TEXT, d7 TEXT, d8 TEXT,
+  d9 TEXT, d10 TEXT, d11 TEXT, d12 TEXT, d13 TEXT, d14 TEXT, d15 TEXT, d16 TEXT,
   value REAL NOT NULL,
   upload_id INTEGER,
   updated_at TEXT NOT NULL
@@ -188,6 +189,7 @@ CREATE TABLE IF NOT EXISTS fact_audit (
   model_id INTEGER NOT NULL,
   upload_id INTEGER,
   d1 TEXT, d2 TEXT, d3 TEXT, d4 TEXT, d5 TEXT, d6 TEXT, d7 TEXT, d8 TEXT,
+  d9 TEXT, d10 TEXT, d11 TEXT, d12 TEXT, d13 TEXT, d14 TEXT, d15 TEXT, d16 TEXT,
   old_value REAL,
   new_value REAL,
   source TEXT NOT NULL DEFAULT 'write',
@@ -276,6 +278,24 @@ for (const migration of [
   "ALTER TABLE scheduled_syncs ADD COLUMN tenant_id INTEGER NOT NULL DEFAULT 1",
   "ALTER TABLE reports ADD COLUMN version INTEGER NOT NULL DEFAULT 1",
   "ALTER TABLE dashboards ADD COLUMN version INTEGER NOT NULL DEFAULT 1",
+  // Model basina maks. boyut sayisi 8 -> 16'ya cikarildi (bkz. lib/model.ts
+  // MAX_MODEL_DIMENSIONS) — mevcut veritabanlarina yeni d9..d16 kolonlari eklenir.
+  "ALTER TABLE facts ADD COLUMN d9 TEXT",
+  "ALTER TABLE facts ADD COLUMN d10 TEXT",
+  "ALTER TABLE facts ADD COLUMN d11 TEXT",
+  "ALTER TABLE facts ADD COLUMN d12 TEXT",
+  "ALTER TABLE facts ADD COLUMN d13 TEXT",
+  "ALTER TABLE facts ADD COLUMN d14 TEXT",
+  "ALTER TABLE facts ADD COLUMN d15 TEXT",
+  "ALTER TABLE facts ADD COLUMN d16 TEXT",
+  "ALTER TABLE fact_audit ADD COLUMN d9 TEXT",
+  "ALTER TABLE fact_audit ADD COLUMN d10 TEXT",
+  "ALTER TABLE fact_audit ADD COLUMN d11 TEXT",
+  "ALTER TABLE fact_audit ADD COLUMN d12 TEXT",
+  "ALTER TABLE fact_audit ADD COLUMN d13 TEXT",
+  "ALTER TABLE fact_audit ADD COLUMN d14 TEXT",
+  "ALTER TABLE fact_audit ADD COLUMN d15 TEXT",
+  "ALTER TABLE fact_audit ADD COLUMN d16 TEXT",
 ]) {
   try {
     sqlite.exec(migration);

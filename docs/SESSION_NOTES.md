@@ -309,3 +309,44 @@ Tamamlanan Faz 3 maddeleri (hepsi ayrı commit):
   sunucusuna karşı tam PATCH→undo→redo→cleanup döngüsü doğrulandı.
   Lint/typecheck/build temiz. **Henüz commit edilmedi, sıradaki adım
   commit+push.**
+
+## 2026-07-10 — Çoklu-model join sorusu + boyut sınırı 8→16
+
+- Kullanıcı "birden fazla modeli joinleyip raporlamak mümkün mü" diye sordu —
+  hayır: `reports.modelId` tekil, `query.ts` tek model `facts` sorguluyor,
+  `dimension_members`'ta attribute/özellik alanı yok. Kullanıcı talebiyle
+  `docs/ROADMAP.md` backlog'a bağımlılık sırasıyla iki madde eklendi: (1)
+  boyut üyesi özellikleri (`dimension_member_attributes` taslağı), (2) ona
+  BAĞIMLI çoklu-model join (ortak boyut veya attribute üzerinden, SQL JOIN
+  değil uygulama-katmanı eşleştirme). Commit+push: `94149db`.
+- Kullanıcı "model başına max boyut sayısı var mı" diye sordu — evet: `facts`/
+  `fact_audit` EAV değil, sabit `d1..d8` kolonlu (`lib/db/schema.ts`), zod
+  `.max(8)` (`api/models/route.ts`) bunu erken reddediyordu.
+- Kullanıcı 3 talep/soru iletti: (1) "sınırsız boyut" backlog'a eklensin,
+  (2) sınırı şimdilik 8→16 çıkar, (3) tek `value` kolonunu da artırmak/
+  sınırsız yapmak mümkün mü (soru, kod değişikliği istenmedi).
+  - **(2) uygulandı:** `lib/model.ts`'e `MAX_MODEL_DIMENSIONS = 16` sabiti
+    eklendi (tek kaynak), `api/models/route.ts` zod `.max(8)` →
+    `.max(MAX_MODEL_DIMENSIONS)`. `lib/db/schema.ts` (`facts`/`factAudit`
+    drizzle tanımları) ve `lib/db/index.ts` (DDL `CREATE TABLE` + mevcut
+    veritabanları için `ALTER TABLE ... ADD COLUMN d9..d16` migrasyonu, hem
+    `facts` hem `fact_audit` için) güncellendi. Gerçek dev `data/planrep.db`
+    dosyasında migrasyonun uygulandığı `PRAGMA table_info` ile doğrulandı.
+    `lib/tenant.ts` yorumundaki "d1..d8" referansı "d1..d16" yapıldı.
+  - **Ortam notu (önemli, gelecek oturumlar için):** proje klasörü yolunda
+    `&` karakteri var (`NTT PLA&REP`) — `npm run <script>` Windows'ta cmd.exe
+    shim'i (.cmd dosyası) bu karakteri yanlış işliyor ("not recognized as
+    internal or external command" hatası). Çözüm: npm script'leri DEĞİL,
+    doğrudan `node node_modules/<pkg>/bin/...` çağır (örn.
+    `node node_modules/typescript/bin/tsc --noEmit`,
+    `node node_modules/vitest/vitest.mjs run`,
+    `node node_modules/eslint/bin/eslint.js`,
+    `node node_modules/next/dist/bin/next build`). Doğrulama: typecheck
+    temiz, **300/300 test** geçti, lint 0 hata (1 önceden var olan ilişkisiz
+    uyarı), `next build` başarılı (tüm route'lar derlendi).
+  - **(1) ve (3) backlog'a eklendi** (henüz kod değişikliği yok, kapsam
+    netleşmedi): "Sınırsız boyut sayısı (EAV'a geçiş)" ve "Sınırsız/çoklu
+    değer (measure) kolonu" — ikisi de aynı köke sahip (sabit kolon →
+    EAV dönüşümü) ama ayrı maddeler olarak eklendi, measure maddesi boyut
+    maddesiyle birlikte ele alınması gerektiği notuyla.
+  - **Henüz commit edilmedi** — sıradaki adım commit+push.

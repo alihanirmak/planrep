@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getSession } from "@/lib/auth";
-import { getModels } from "@/lib/model";
+import { getModels, MAX_MODEL_DIMENSIONS } from "@/lib/model";
 import { sqlite } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
 import { getServerT } from "@/lib/i18n-server";
@@ -16,7 +16,7 @@ const createSchema = z.object({
   code: z.string().min(1).max(40).regex(/^[A-Za-z0-9_]+$/),
   name: z.string().min(1).max(120),
   description: z.string().max(500).nullish(),
-  dimensionIds: z.array(z.number().int()).min(1).max(8),
+  dimensionIds: z.array(z.number().int()).min(1).max(MAX_MODEL_DIMENSIONS),
 });
 
 export async function POST(req: Request) {

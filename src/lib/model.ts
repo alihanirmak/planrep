@@ -1,5 +1,11 @@
 import { sqlite } from "./db";
 
+// facts/fact_audit tablolarindaki sabit d1..d16 kolon sayisi (bkz. lib/db/schema.ts,
+// lib/db/index.ts DDL) — EAV DEGIL, performans icin sabit kolon tasarimi; bu nedenle
+// bir modele eklenebilecek boyut sayisinin fiziksel bir tavani var. Gercekten
+// sinirsiz boyut (EAV'a gecis) backlog'da ayri bir mimari karar (docs/ROADMAP.md).
+export const MAX_MODEL_DIMENSIONS = 16;
+
 export type Member = {
   id: number;
   code: string;
